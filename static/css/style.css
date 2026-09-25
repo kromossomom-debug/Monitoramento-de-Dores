@@ -1,0 +1,129 @@
+/* Custom styles for Painel de Gestão de Dores */
+:root {
+    --primary: #1e40af;
+    --primary-hover: #1d4ed8;
+    --accent: #0ea5e9;
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+}
+
+body {
+    background-color: var(--bg-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Card subtle glow and hover */
+.kpi-card {
+    transition: all 0.2s ease-in-out;
+    border: 1px solid #e2e8f0;
+}
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+}
+
+/* Badge styles */
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.badge-aberto { background-color: #fef3c7; color: #92400e; }
+.badge-analise { background-color: #e0f2fe; color: #0369a1; }
+.badge-tratativa { background-color: #f3e8ff; color: #6b21a8; }
+.badge-terceiros { background-color: #ffedd5; color: #c2410c; }
+.badge-concluido { background-color: #dcfce7; color: #166534; }
+.badge-cancelado { background-color: #f1f5f9; color: #64748b; }
+
+.badge-sla-vencido { background-color: #fee2e2; color: #991b1b; animation: pulse-subtle 2s infinite; }
+.badge-sla-avencer { background-color: #fef3c7; color: #92400e; }
+.badge-sla-noprazo { background-color: #dcfce7; color: #166534; }
+.badge-sla-concluido { background-color: #f1f5f9; color: #475569; }
+
+.badge-prioridade-critica { background-color: #ffe4e6; color: #9f1239; font-weight: 700; }
+.badge-prioridade-alta { background-color: #ffedd5; color: #9a3412; }
+.badge-prioridade-media { background-color: #fef9c3; color: #854d0e; }
+.badge-prioridade-baixa { background-color: #f0fdf4; color: #166534; }
+
+@keyframes pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Navigation tabs */
+.nav-tab-btn {
+    transition: all 0.15s ease-in-out;
+}
+.nav-tab-btn.active {
+    background-color: #ffffff;
+    color: #1e40af;
+    border-bottom: 2px solid #2563eb;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Modal styles */
+.modal-backdrop {
+    background-color: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.2s ease-in-out;
+}
+
+/* Table styling */
+.table-container table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.table-container th {
+    position: sticky;
+    top: 0;
+    background-color: #f8fafc;
+    z-index: 10;
+}
+
+/* Custom Toast */
+#toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.toast {
+    animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+@keyframes slide-in {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}

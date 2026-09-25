@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapeamento de Dores | Painel Executivo & Operacional</title>
+    <!-- Local Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Local Chart.js & Lucide -->
+    <script src="/static/js/chart.min.js"></script>
+    <script src="/static/js/lucide.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo & Brand -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md">
+                        <i data-lucide="activity" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 class="text-lg font-bold text-gray-900 leading-tight">Mapeamento de Dores</h1>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                Painel Executivo
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 flex items-center gap-1">
+                            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-green-600"></i>
+                            Base Excel: <span id="header-file-name" class="font-medium text-gray-700">Monitoramento_Dores - FINAL.xlsx</span>
+                            <span id="header-excel-status" class="inline-block w-2 h-2 rounded-full bg-green-500 ml-1" title="Excel Conectado"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Action Controls -->
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <button id="btn-refresh" onclick="refreshAllData()" class="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition" title="Recarregar dados do Excel">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                    
+                    <button onclick="openExcelFile()" class="hidden md:inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm" title="Abrir planilha no Microsoft Excel">
+                        <i data-lucide="external-link" class="w-4 h-4 mr-1.5 text-green-600"></i>
+                        Abrir no Excel
+                    </button>
+
+                    <a href="/api/download-excel" class="hidden md:inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm" title="Baixar cópia da planilha Excel atualizada">
+                        <i data-lucide="download" class="w-4 h-4 mr-1.5 text-blue-600"></i>
+                        Baixar Excel
+                    </a>
+
+                    <button onclick="openNewModal()" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm">
+                        <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
+                        Nova Pendência
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="border-t border-gray-100 bg-gray-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav class="flex space-x-4" aria-label="Tabs">
+                    <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="nav-tab-btn active px-4 py-3 font-medium text-sm text-gray-600 flex items-center space-x-2">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                        <span>Dashboard Executivo</span>
+                    </button>
+                    <button onclick="switchTab('consulta')" id="tab-btn-consulta" class="nav-tab-btn px-4 py-3 font-medium text-sm text-gray-600 flex items-center space-x-2">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i>
+                        <span>Consulta & Gestão</span>
+                        <span id="badge-total-records" class="ml-1.5 px-2 py-0.2 rounded-full text-xs bg-gray-200 text-gray-700">0</span>
+                    </button>
+                    <button onclick="switchTab('cadastro')" id="tab-btn-cadastro" class="nav-tab-btn px-4 py-3 font-medium text-sm text-gray-600 flex items-center space-x-2">
+                        <i data-lucide="file-plus" class="w-4 h-4"></i>
+                        <span>Cadastrar Pendência</span>
+                    </button>
+                    <button onclick="switchTab('status')" id="tab-btn-status" class="nav-tab-btn px-4 py-3 font-medium text-sm text-gray-600 flex items-center space-x-2">
+                        <i data-lucide="database" class="w-4 h-4"></i>
+                        <span>Base de Dados & Backups</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Executive KPI Metrics Grid -->
+        <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+            <!-- Total Ocorrências -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-gray-500 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Total</span>
+                    <i data-lucide="layers" class="w-4 h-4 text-blue-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-gray-900" id="kpi-total">0</div>
+                <div class="text-xs text-gray-500 mt-0.5">Ocorrências registradas</div>
+            </div>
+
+            <!-- Ocorrências Abertas -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-yellow-600 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Em Aberto</span>
+                    <i data-lucide="clock" class="w-4 h-4 text-yellow-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-yellow-700" id="kpi-abertas">0</div>
+                <div class="text-xs text-gray-500 mt-0.5">Aguardando solução</div>
+            </div>
+
+            <!-- SLA Vencido -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs border-l-4 border-l-red-500">
+                <div class="flex items-center justify-between text-red-600 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">SLA Vencido</span>
+                    <i data-lucide="alert-octagon" class="w-4 h-4 text-red-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-red-600" id="kpi-sla-vencido">0</div>
+                <div class="text-xs text-red-500 font-medium mt-0.5">Ação urgente requerida</div>
+            </div>
+
+            <!-- SLA A Vencer -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs border-l-4 border-l-amber-400">
+                <div class="flex items-center justify-between text-amber-600 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">SLA A Vencer</span>
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-amber-600" id="kpi-sla-avencer">0</div>
+                <div class="text-xs text-amber-600 mt-0.5">Prazo &le; 2 dias</div>
+            </div>
+
+            <!-- Concluídas -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-green-600 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Concluídas</span>
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
+                </div>
+                <div class="flex items-baseline space-x-1">
+                    <div class="text-2xl font-bold text-green-700" id="kpi-concluidas">0</div>
+                    <span class="text-xs text-green-600 font-semibold" id="kpi-taxa-resolucao">(0%)</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-0.5">Taxa de resolução</div>
+            </div>
+
+            <!-- Valor Total das Notas -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-gray-500 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Valor Total</span>
+                    <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-500"></i>
+                </div>
+                <div class="text-xl font-bold text-gray-900 truncate" id="kpi-valor-total">R$ 0,00</div>
+                <div class="text-xs text-gray-500 mt-0.5">Impacto financeiro</div>
+            </div>
+
+            <!-- Tempo Médio Aberto -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-gray-500 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Méd. Aberto</span>
+                    <i data-lucide="calendar" class="w-4 h-4 text-indigo-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-gray-900" id="kpi-tempo-aberto">0 d</div>
+                <div class="text-xs text-gray-500 mt-0.5">Dias sem solução</div>
+            </div>
+
+            <!-- Tempo Médio Resolução -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
+                <div class="flex items-center justify-between text-gray-500 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Méd. Resolução</span>
+                    <i data-lucide="check-check" class="w-4 h-4 text-teal-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-gray-900" id="kpi-tempo-resolucao">0 d</div>
+                <div class="text-xs text-gray-500 mt-0.5">Dias até conclusão</div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 1: DASHBOARD EXECUTIVO                  -->
+        <!-- ========================================== -->
+        <div id="tab-content-dashboard" class="space-y-6">
+
+            <!-- Urgent Attention Banner (If SLA Vencido > 0) -->
+            <div id="urgent-banner" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-xl shadow-xs flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 rounded-lg bg-red-100 text-red-700">
+                        <i data-lucide="alert-octagon" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-red-800">Atenção Executiva: Existem pendências com SLA Vencido!</h4>
+                        <p class="text-xs text-red-700" id="urgent-banner-text">1 ocorrência ultrapassou o prazo de atendimento estipulado.</p>
+                    </div>
+                </div>
+                <button onclick="filterByUrgency('Vencido')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
+                    Ver Pendências Vencidas
+                </button>
+            </div>
+
+            <!-- Charts Row 1: Status & SLA -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Chart 1: Status das Ocorrências -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Status das Ocorrências</h3>
+                            <p class="text-xs text-gray-500">Distribuição pelo fluxo de atendimento</p>
+                        </div>
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartStatus"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Situação do SLA -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Situação do SLA</h3>
+                            <p class="text-xs text-gray-500">Controle de cumprimento de prazos</p>
+                        </div>
+                        <i data-lucide="timer" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartSla"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Prioridade das Dores -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Gravidade / Prioridade</h3>
+                            <p class="text-xs text-gray-500">Volume por nível de criticidade</p>
+                        </div>
+                        <i data-lucide="bar-chart-2" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartPrioridade"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 2: Categorias, Setores & Filiais -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Chart 4: Dores por Categoria -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Dores por Categoria</h3>
+                            <p class="text-xs text-gray-500">Origem da dor (Estoque, Fiscal, etc.)</p>
+                        </div>
+                        <i data-lucide="tag" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartCategoria"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 5: Setores Responsáveis -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Setor Responsável</h3>
+                            <p class="text-xs text-gray-500">Departamentos com pendências atribuídas</p>
+                        </div>
+                        <i data-lucide="briefcase" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartSetor"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 6: Ocorrências por Filial -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Ocorrências por Filial</h3>
+                            <p class="text-xs text-gray-500">Unidades operacionais</p>
+                        </div>
+                        <i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                        <canvas id="chartFilial"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Highlights Table Preview -->
+            <div class="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden">
+                <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Ocorrências Mais Recentes / Críticas</h3>
+                        <p class="text-xs text-gray-500">Últimos registros sincronizados da planilha Excel</p>
+                    </div>
+                    <button onclick="switchTab('consulta')" class="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        Ver todas as pendências <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
+                        <thead class="bg-gray-100 text-gray-600 uppercase font-semibold">
+                            <tr>
+                                <th class="px-4 py-3">ID</th>
+                                <th class="px-4 py-3">Data</th>
+                                <th class="px-4 py-3">Filial / Categoria</th>
+                                <th class="px-4 py-3">Setor Responsável</th>
+                                <th class="px-4 py-3">Descrição do Problema</th>
+                                <th class="px-4 py-3">Prioridade</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Situação SLA</th>
+                                <th class="px-4 py-3 text-right">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-recent-table" class="divide-y divide-gray-100 bg-white">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: CONSULTA & GESTÃO                   -->
+        <!-- ========================================== -->
+        <div id="tab-content-consulta" class="hidden space-y-4">
+            
+            <!-- Filter & Search Bar -->
+            <div class="bg-white p-4 rounded-2xl shadow-xs border border-gray-200 space-y-3">
+                <div class="flex flex-col md:flex-row gap-3 items-center justify-between">
+                    <!-- Search Input -->
+                    <div class="relative w-full md:w-96">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Buscar por ID, descrição, responsável, NF..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+
+                    <!-- Filter Dropdowns -->
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                        <!-- Status Filter -->
+                        <select id="filter-status" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">Status: Todos</option>
+                        </select>
+
+                        <!-- Prioridade Filter -->
+                        <select id="filter-prioridade" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">Prioridade: Todas</option>
+                        </select>
+
+                        <!-- Situação SLA Filter -->
+                        <select id="filter-sla" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">SLA: Todos</option>
+                            <option value="No prazo">No prazo</option>
+                            <option value="A vencer">A vencer</option>
+                            <option value="Vencido">Vencido</option>
+                            <option value="Concluído">Concluído</option>
+                        </select>
+
+                        <!-- Filial Filter -->
+                        <select id="filter-filial" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">Filial: Todas</option>
+                        </select>
+
+                        <!-- Reset Button -->
+                        <button onclick="resetFilters()" class="p-2 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-100 transition" title="Limpar Filtros">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Filter Tags -->
+                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 text-xs">
+                    <span class="text-gray-500 font-medium">Filtro rápido:</span>
+                    <button onclick="setQuickFilter('')" class="quick-chip active px-2.5 py-1 rounded-lg bg-gray-200 text-gray-800 font-medium hover:bg-gray-300 transition">Todos</button>
+                    <button onclick="setQuickFilter('aberto')" class="quick-chip px-2.5 py-1 rounded-lg bg-yellow-100 text-yellow-800 font-medium hover:bg-yellow-200 transition">Abertos / Em Andamento</button>
+                    <button onclick="setQuickFilter('vencido')" class="quick-chip px-2.5 py-1 rounded-lg bg-red-100 text-red-800 font-medium hover:bg-red-200 transition">SLA Vencido</button>
+                    <button onclick="setQuickFilter('avencer')" class="quick-chip px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 transition">SLA A Vencer</button>
+                    <button onclick="setQuickFilter('critica')" class="quick-chip px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-medium hover:bg-rose-200 transition">Prioridade Crítica</button>
+                    <button onclick="setQuickFilter('concluido')" class="quick-chip px-2.5 py-1 rounded-lg bg-green-100 text-green-800 font-medium hover:bg-green-200 transition">Concluídos</button>
+                </div>
+            </div>
+
+            <!-- Records Data Table -->
+            <div class="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto table-container">
+                    <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
+                        <thead class="bg-gray-50 text-gray-600 font-semibold uppercase tracking-wider">
+                            <tr>
+                                <th class="px-3.5 py-3 text-center">ID</th>
+                                <th class="px-3.5 py-3">Datas</th>
+                                <th class="px-3.5 py-3">Filial / Categoria</th>
+                                <th class="px-3.5 py-3">Setor Responsável</th>
+                                <th class="px-3.5 py-3">Descrição / NF</th>
+                                <th class="px-3.5 py-3">Prioridade</th>
+                                <th class="px-3.5 py-3">Status</th>
+                                <th class="px-3.5 py-3">Situação SLA</th>
+                                <th class="px-3.5 py-3 text-right">Valor (R$)</th>
+                                <th class="px-3.5 py-3 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-table-body" class="divide-y divide-gray-100 bg-white">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Table Footer / Count -->
+                <div class="p-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+                    <span id="records-counter-text">Exibindo 0 ocorrências</span>
+                    <span>Sincronizado diretamente com a planilha Excel</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: CADASTRAR PENDÊNCIA (DEDICADO)      -->
+        <!-- ========================================== -->
+        <div id="tab-content-cadastro" class="hidden">
+            <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xs border border-gray-200 p-6 md:p-8">
+                
+                <div class="flex items-center justify-between pb-5 mb-6 border-b border-gray-200">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900">Cadastrar Nova Pendência / Dor</h2>
+                        <p class="text-xs text-gray-500 mt-1">Os dados serão inseridos diretamente na planilha Excel mantendo todas as fórmulas de cálculo.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            <i data-lucide="save" class="w-3.5 h-3.5 mr-1"></i> Gravação Direta no Excel
+                        </span>
+                    </div>
+                </div>
+
+                <form id="form-cadastro-pendencia" onsubmit="handleFormSubmit(event, 'cadastro')">
+                    
+                    <!-- Section 1: Dados Gerais da Ocorrência -->
+                    <div class="mb-8">
+                        <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">1</span>
+                            Dados Gerais da Ocorrência
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Data da Ocorrência *</label>
+                                <input type="date" name="data_ocorrencia" id="cad_data_ocorrencia" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Data de Registro *</label>
+                                <input type="date" name="data_registro" id="cad_data_registro" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Responsável pelo Registro</label>
+                                <input type="text" name="responsavel" id="cad_responsavel" placeholder="Ex: SEU NOME" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Filial *</label>
+                                <select name="filial" id="cad_filial" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <!-- Populated from Parâmetros -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Setor Responsável *</label>
+                                <select name="setor_responsavel" id="cad_setor_responsavel" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <!-- Populated from Parâmetros -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Setor Impactado</label>
+                                <select name="setor_impactado" id="cad_setor_impactado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <!-- Populated from Parâmetros -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Categoria da Dor *</label>
+                                <select name="categoria_dor" id="cad_categoria_dor" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <!-- Populated from Parâmetros -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Detalhamento do Problema -->
+                    <div class="mb-8">
+                        <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">2</span>
+                            Detalhamento do Problema & Criticidade
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Descrição do Problema *</label>
+                                <textarea name="descricao_problema" id="cad_descricao_problema" rows="3" required placeholder="Descreva com detalhes o problema ou a dor identificada..." class="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Causa Raiz</label>
+                                    <input type="text" name="causa_raiz" id="cad_causa_raiz" placeholder="Ex: Erro manual, falha de sistema, processo incorreto..." class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Impacto no Negócio</label>
+                                    <input type="text" name="impacto_negocio" id="cad_impacto_negocio" placeholder="Ex: Duplicidade fiscal, atraso de entrega, prejuízo..." class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                <div>
+                                    <label class="block text-xs font-semibold text-blue-900 mb-1">Prioridade / Criticidade *</label>
+                                    <select name="prioridade" id="cad_prioridade" onchange="updateSlaBadgePreview('cad')" required class="w-full border border-blue-300 rounded-xl px-3 py-2 text-sm bg-white font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <!-- Populated via JS -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-blue-900 mb-1">SLA Automático</label>
+                                    <div id="cad_sla_preview" class="px-3 py-2 bg-white rounded-xl border border-blue-200 text-sm font-bold text-blue-800 flex items-center justify-between">
+                                        <span>SLA: 2 dias</span>
+                                        <span class="text-xs font-normal text-gray-500">Calculado via Excel</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-blue-900 mb-1">Recorrente? *</label>
+                                    <select name="recorrente" id="cad_recorrente" class="w-full border border-blue-300 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <option value="Não">Não</option>
+                                        <option value="Sim">Sim</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Dados Fiscais / Operacionais (Opcional) -->
+                    <div class="mb-8">
+                        <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-gray-600 text-white flex items-center justify-center text-xs">3</span>
+                            Dados Fiscais & Operacionais (Opcional)
+                        </h3>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Nota Fiscal</label>
+                                <input type="number" name="nota_fiscal" id="cad_nota_fiscal" placeholder="Ex: 27673" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Série</label>
+                                <input type="number" name="serie" id="cad_serie" placeholder="Ex: 2" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Qtd. Nota (kg)</label>
+                                <input type="number" step="any" name="qtd_nota_kg" id="cad_qtd_nota_kg" placeholder="Ex: 47240" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Valor das Notas (R$)</label>
+                                <input type="number" step="0.01" name="valor_notas" id="cad_valor_notas" placeholder="Ex: 94302.40" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Nº Chamado</label>
+                                <input type="text" name="numero_chamado" id="cad_numero_chamado" placeholder="Ex: 17714063" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Plano de Ação & Solução -->
+                    <div class="mb-8">
+                        <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">4</span>
+                            Plano de Ação & Tratativa
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Status Inicial *</label>
+                                <select name="status" id="cad_status" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
+                                    <!-- Populated via JS -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Prazo Acordado</label>
+                                <input type="date" name="prazo" id="cad_prazo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Responsável pela Solução</label>
+                                <input type="text" name="responsavel_solucao" id="cad_responsavel_solucao" placeholder="Ex: SBS Faturamento" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Plano de Ação / Encaminhamento</label>
+                                <textarea name="plano_acao" id="cad_plano_acao" rows="2" placeholder="Descreva as medidas que serão adotadas para solucionar a pendência..." class="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Observações Adicionais</label>
+                                <textarea name="observacoes" id="cad_observacoes" rows="2" placeholder="Observações complementares..." class="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                        <button type="reset" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                            Limpar Formulário
+                        </button>
+                        <button type="submit" id="btn-submit-cad" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md transition flex items-center gap-2">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                            Gravar Pendência no Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: STATUS DA BASE DE DADOS EXCEL       -->
+        <!-- ========================================== -->
+        <div id="tab-content-status" class="hidden">
+            <div class="max-w-4xl mx-auto space-y-6">
+                <!-- File Info Card -->
+                <div class="bg-white rounded-2xl shadow-xs border border-gray-200 p-6">
+                    <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-gray-200">
+                        <div class="p-3 bg-green-100 rounded-xl text-green-700">
+                            <i data-lucide="file-spreadsheet" class="w-8 h-8"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-900">Base de Dados: Planilha Excel</h2>
+                            <p class="text-xs text-gray-500">O sistema lê e grava diretamente no arquivo Excel especificado.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
+                            <span class="text-gray-500 font-semibold block uppercase">Caminho do Arquivo Ativo</span>
+                            <code class="block bg-white p-2.5 rounded-lg border border-gray-200 text-gray-800 break-all text-xs font-mono" id="status-filepath">-</code>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <span class="text-gray-500 font-semibold block uppercase">Tamanho</span>
+                                <span class="text-lg font-bold text-gray-800" id="status-filesize">-</span>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <span class="text-gray-500 font-semibold block uppercase">Última Modificação</span>
+                                <span class="text-xs font-bold text-gray-800" id="status-filemtime">-</span>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <span class="text-gray-500 font-semibold block uppercase">Total de Backups</span>
+                                <span class="text-lg font-bold text-blue-600" id="status-backupcount">0</span>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <span class="text-gray-500 font-semibold block uppercase">Integridade</span>
+                                <span class="text-xs font-bold text-green-600 flex items-center gap-1">
+                                    <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Preservando Fórmulas
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button onclick="openExcelFile()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2">
+                            <i data-lucide="external-link" class="w-4 h-4"></i> Abrir Arquivo no Excel Agora
+                        </button>
+                        <a href="/api/download-excel" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Baixar Arquivo Excel
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Excel Architecture Guide -->
+                <div class="bg-white rounded-2xl shadow-xs border border-gray-200 p-6">
+                    <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-4 h-4 text-blue-600"></i>
+                        Arquitetura & Fórmulas Preservadas
+                    </h3>
+                    <div class="space-y-3 text-xs text-gray-600">
+                        <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <strong class="text-gray-800">Aba 1 (Indicadores):</strong> Painel de fórmulas de contagem (COUNT, COUNTIFS, AVERAGEIFS) recalculadas nativamente pelo Excel a cada salvamento.
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <strong class="text-gray-800">Aba 2 (Monitoramento de Dores):</strong> Contém todas as 30 colunas de dados. Cada inserção grava as fórmulas:
+                            <code class="block mt-1 font-mono text-gray-700">Col A: =IF(C{r}="","",ROW()-1)</code>
+                            <code class="block font-mono text-gray-700">Col U: =IF(C{r}="","",IF(T{r}="",TODAY()-C{r},T{r}-C{r}))</code>
+                            <code class="block font-mono text-gray-700">Col X: =IF(P{r}="","",IFERROR(VLOOKUP(P{r},Parâmetros!$J$2:$K$5,2,FALSE),""))</code>
+                            <code class="block font-mono text-gray-700">Col Y: =IF(OR(C{r}="",X{r}=""),"",C{r}+X{r})</code>
+                            <code class="block font-mono text-gray-700">Col Z: =IF(C{r}="","",IF(Q{r}="Concluído","Concluído",IF(Y{r}&lt;TODAY(),"Vencido",...)))</code>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <strong class="text-gray-800">Aba 3 (Parâmetros):</strong> Referência central de SLAs e listas suspensas (Status, Prioridade, Filial, Setores).
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-400">
+        <p>Sistema de Mapeamento de Dores | Painel Local Integrado com Microsoft Excel</p>
+    </footer>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 1: CADASTRAR NOVA PENDÊNCIA (MODAL RÁPIDO)        -->
+    <!-- ======================================================== -->
+    <div id="modal-nova-pendencia" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                        <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900">Cadastrar Nova Pendência</h3>
+                        <p class="text-xs text-gray-500">Gera um novo registro na planilha Excel</p>
+                    </div>
+                </div>
+                <button onclick="closeNewModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body / Form -->
+            <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                <form id="form-modal-pendencia" onsubmit="handleFormSubmit(event, 'modal')">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Data da Ocorrência *</label>
+                            <input type="date" name="data_ocorrencia" id="modal_data_ocorrencia" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Data de Registro *</label>
+                            <input type="date" name="data_registro" id="modal_data_registro" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável *</label>
+                            <input type="text" name="responsavel" id="modal_responsavel" placeholder="NOME DO RESPONSÁVEL" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none uppercase">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Filial *</label>
+                            <select name="filial" id="modal_filial" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Setor Responsável *</label>
+                            <select name="setor_responsavel" id="modal_setor_responsavel" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Setor Impactado</label>
+                            <select name="setor_impactado" id="modal_setor_impactado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Categoria da Dor *</label>
+                            <select name="categoria_dor" id="modal_categoria_dor" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Descrição do Problema *</label>
+                        <textarea name="descricao_problema" id="modal_descricao_problema" rows="2" required placeholder="Descreva o problema de forma clara..." class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Causa Raiz</label>
+                            <input type="text" name="causa_raiz" id="modal_causa_raiz" placeholder="Causa identificada" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Impacto no Negócio</label>
+                            <input type="text" name="impacto_negocio" id="modal_impacto_negocio" placeholder="Impacto gerado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                        <div>
+                            <label class="block text-xs font-bold text-blue-900 mb-1">Prioridade *</label>
+                            <select name="prioridade" id="modal_prioridade" onchange="updateSlaBadgePreview('modal')" required class="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs bg-white font-semibold focus:ring-2 focus:ring-blue-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-blue-900 mb-1">SLA Automático</label>
+                            <div id="modal_sla_preview" class="px-3 py-2 bg-white rounded-xl border border-blue-200 text-xs font-bold text-blue-800">
+                                SLA: 2 dias
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-blue-900 mb-1">Recorrente?</label>
+                            <select name="recorrente" id="modal_recorrente" class="w-full border border-blue-300 rounded-xl px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="Não">Não</option>
+                                <option value="Sim">Sim</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Nota Fiscal</label>
+                            <input type="number" name="nota_fiscal" id="modal_nota_fiscal" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Série</label>
+                            <input type="number" name="serie" id="modal_serie" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Valor (R$)</label>
+                            <input type="number" step="0.01" name="valor_notas" id="modal_valor_notas" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Nº Chamado</label>
+                            <input type="text" name="numero_chamado" id="modal_numero_chamado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Status Inicial *</label>
+                            <select name="status" id="modal_status" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none font-semibold"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Prazo</label>
+                            <input type="date" name="prazo" id="modal_prazo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável pela Solução</label>
+                            <input type="text" name="responsavel_solucao" id="modal_responsavel_solucao" placeholder="Ex: Faturamento" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Plano de Ação</label>
+                        <textarea name="plano_acao" id="modal_plano_acao" rows="2" placeholder="Ação planejada para solucionar..." class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+
+                    <!-- Footer Buttons -->
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-4">
+                        <button type="button" onclick="closeNewModal()" class="px-4 py-2 border border-gray-300 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-submit-modal" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                            <i data-lucide="check" class="w-4 h-4"></i> Salvar na Planilha
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 2: DETALHES COMPLETOS DA PENDÊNCIA                -->
+    <!-- ======================================================== -->
+    <div id="modal-detalhes" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900" id="detalhe-title">Pendência #1</h3>
+                        <p class="text-xs text-gray-500" id="detalhe-subtitle">Visualização de todos os 30 campos da base</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="openEditModalFromDetail()" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Editar / Tratar
+                    </button>
+                    <button onclick="closeDetailsModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-5 flex-1 text-xs" id="detalhes-content">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 3: ATUALIZAR / TRATAR STATUS (EDIT)               -->
+    <!-- ======================================================== -->
+    <div id="modal-editar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                        <i data-lucide="edit" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900" id="edit-modal-title">Atualizar Pendência #1</h3>
+                        <p class="text-xs text-gray-500">Mudar status, concluir, atualizar plano de ação</p>
+                    </div>
+                </div>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                <form id="form-edit-pendencia" onsubmit="handleEditSubmit(event)">
+                    <input type="hidden" id="edit_record_id">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Status da Ocorrência *</label>
+                            <select id="edit_status" name="status" onchange="toggleConclusionDate()" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Prioridade</label>
+                            <select id="edit_prioridade" name="prioridade" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Prazo Acordado</label>
+                            <input type="date" id="edit_prazo" name="prazo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Data de Conclusão</label>
+                            <input type="date" id="edit_data_conclusao" name="data_conclusao" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                            <span class="text-[10px] text-gray-400">Preenchida automaticamente ao marcar "Concluído"</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável pela Solução</label>
+                            <input type="text" id="edit_responsavel_solucao" name="responsavel_solucao" placeholder="Ex: SBS Faturamento" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Nº Chamado</label>
+                            <input type="text" id="edit_numero_chamado" name="numero_chamado" placeholder="Ex: 17714063" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Plano de Ação / Resolução</label>
+                        <textarea id="edit_plano_acao" name="plano_acao" rows="3" placeholder="Detalhes do plano de ação implementado..." class="w-full border border-gray-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Observações</label>
+                        <textarea id="edit_observacoes" name="observacoes" rows="2" placeholder="Observações de acompanhamento..." class="w-full border border-gray-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-4">
+                        <button type="button" onclick="closeEditModal()" class="px-4 py-2 border border-gray-300 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-50 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-submit-edit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                            <i data-lucide="check" class="w-4 h-4"></i> Gravar Alterações no Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Application Script -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
