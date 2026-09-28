@@ -78,6 +78,35 @@ def format_file_size(size_bytes: int) -> str:
         return f"{round(size_bytes / (1024 * 1024), 2)} MB"
 
 
+def parse_brazilian_number(val: Any) -> Optional[float]:
+    """
+    Parses Brazilian formatted numbers safely:
+    - '10.000' -> 10000.0
+    - '10.000 kg' -> 10000.0
+    - '34.350,00' -> 34350.00
+    - 'R$ 34.350,00' -> 34350.00
+    - 47240 -> 47240.0
+    """
+    if val is None or val == "":
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    s = s.replace("R$", "").replace("kg", "").replace("KG", "").replace("Kg", "").strip()
+    if "." in s and "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+    elif "." in s:
+        parts = s.split(".")
+        if all(len(p) == 3 for p in parts[1:]):
+            s = "".join(parts)
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
 def get_record_attachments(record_id: int) -> List[Dict[str, Any]]:
     """Lists all files attached to a specific record ID with rich metadata."""
     rec_dir = os.path.join(UPLOADS_DIR, str(record_id))
@@ -392,16 +421,31 @@ def get_all_records() -> List[Dict[str, Any]]:
             item[f"{df}_iso"] = format_date_iso(item.get(df))
             item[f"{df}_br"] = format_date_br(item.get(df)) or "-"
 
-        for nf in ["nota_fiscal", "serie", "qtd_nota_kg", "numero_chamado"]:
+        for nf in ["nota_fiscal", "serie", "numero_chamado"]:
             try:
                 item[nf] = int(item[nf]) if item[nf] is not None and str(item[nf]).strip() != "" else None
             except (ValueError, TypeError):
                 pass
 
-        try:
-            item["valor_notas"] = float(item["valor_notas"]) if item["valor_notas"] is not None else 0.0
-        except (ValueError, TypeError):
-            item["valor_notas"] = 0.0
+        # Parse Qtd. da Nota em KG (Milhar: ex: 10.000 ou 47.240)
+        qtd_raw = parse_brazilian_number(item.get("qtd_nota_kg"))
+        item["qtd_nota_kg"] = qtd_raw
+        if qtd_raw is not None:
+            if qtd_raw.is_integer():
+                item["qtd_nota_kg_formatted"] = f"{int(qtd_raw):,}".replace(",", ".") + " kg"
+                item["qtd_nota_kg_mask"] = f"{int(qtd_raw):,}".replace(",", ".")
+            else:
+                item["qtd_nota_kg_formatted"] = f"{qtd_raw:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " kg"
+                item["qtd_nota_kg_mask"] = f"{qtd_raw:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        else:
+            item["qtd_nota_kg_formatted"] = "-"
+            item["qtd_nota_kg_mask"] = ""
+
+        # Parse Valor das Notas (R$) no formato Contabilidade (ex: 34.350,00)
+        valor_raw = parse_brazilian_number(item.get("valor_notas")) or 0.0
+        item["valor_notas"] = valor_raw
+        item["valor_notas_formatted"] = f"R$ {valor_raw:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        item["valor_notas_contabil"] = f"{valor_raw:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
         compute_derived_fields(item, sla_map)
 
@@ -616,15 +660,9 @@ def add_record(form_data: Dict[str, Any], files: Optional[List[Any]] = None) -> 
     except (ValueError, TypeError):
         serie = None
 
-    try:
-        qtd_nota_kg = float(form_data.get("qtd_nota_kg")) if form_data.get("qtd_nota_kg") not in (None, "") else None
-    except (ValueError, TypeError):
-        qtd_nota_kg = None
-
-    try:
-        valor_notas = float(form_data.get("valor_notas")) if form_data.get("valor_notas") not in (None, "") else 0.0
-    except (ValueError, TypeError):
-        valor_notas = 0.0
+    # Parse Qtd in KG e Valor in Contabilidade
+    qtd_nota_kg = parse_brazilian_number(form_data.get("qtd_nota_kg"))
+    valor_notas = parse_brazilian_number(form_data.get("valor_notas")) or 0.0
 
     try:
         numero_chamado = int(form_data.get("numero_chamado")) if form_data.get("numero_chamado") not in (None, "") else None
@@ -674,8 +712,15 @@ def add_record(form_data: Dict[str, Any], files: Optional[List[Any]] = None) -> 
     ws.cell(r, 11, descricao)
     ws.cell(r, 12, causa_raiz)
     ws.cell(r, 13, impacto_negocio)
-    ws.cell(r, 14, qtd_nota_kg)
-    ws.cell(r, 15, valor_notas)
+
+    # Col 14: Qtd em KG (Formatação Milhar: ex 10.000)
+    c_qtd = ws.cell(r, 14, qtd_nota_kg)
+    c_qtd.number_format = '#,##0'
+
+    # Col 15: Valor em Reais (Formato Contabilidade: ex 34.350,00)
+    c_val = ws.cell(r, 15, valor_notas)
+    c_val.number_format = r'\R\$\ #,##0.00;[Red]\(\R\$\ #,##0.00\);\- '
+
     ws.cell(r, 16, prioridade)
     ws.cell(r, 17, status)
     ws.cell(r, 18, plano_acao)
@@ -811,16 +856,14 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
             pass
 
     if "qtd_nota_kg" in form_data:
-        try:
-            ws.cell(r, 14, float(form_data["qtd_nota_kg"]) if form_data["qtd_nota_kg"] not in (None, "") else None)
-        except (ValueError, TypeError):
-            pass
+        val_qtd = parse_brazilian_number(form_data["qtd_nota_kg"])
+        c_qtd = ws.cell(r, 14, val_qtd)
+        c_qtd.number_format = '#,##0'
 
     if "valor_notas" in form_data:
-        try:
-            ws.cell(r, 15, float(form_data["valor_notas"]) if form_data["valor_notas"] not in (None, "") else 0.0)
-        except (ValueError, TypeError):
-            pass
+        val_val = parse_brazilian_number(form_data["valor_notas"]) or 0.0
+        c_val = ws.cell(r, 15, val_val)
+        c_val.number_format = r'\R\$\ #,##0.00;[Red]\(\R\$\ #,##0.00\);\- '
 
     if "numero_chamado" in form_data:
         try:

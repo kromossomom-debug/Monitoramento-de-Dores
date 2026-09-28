@@ -53,6 +53,46 @@ function formatCurrency(val) {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 }
 
+// Accounting format (ex: 34.350,00)
+function formatContabil(val) {
+    if (val === null || val === undefined || isNaN(val)) return "0,00";
+    const num = typeof val === "number" ? val : parseFloat(val);
+    return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Quantity in kg format (ex: 10.000 kg)
+function formatKg(val) {
+    if (val === null || val === undefined || isNaN(val) || val === "") return "-";
+    const num = typeof val === "number" ? Math.round(val) : parseInt(val.toString().replace(/\D/g, ""), 10);
+    if (isNaN(num)) return "-";
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " kg";
+}
+
+// Input mask for Contabilidade (R$ 34.350,00)
+function formatCurrencyInput(el) {
+    let value = el.value.replace(/\D/g, "");
+    if (!value) {
+        el.value = "";
+        return;
+    }
+    value = (parseInt(value, 10) / 100).toFixed(2);
+    const parts = value.split(".");
+    const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const decimalPart = parts[1];
+    el.value = `${integerPart},${decimalPart}`;
+}
+
+// Input mask for Quantity in KG (10.000)
+function formatKgInput(el) {
+    let value = el.value.replace(/\D/g, "");
+    if (!value) {
+        el.value = "";
+        return;
+    }
+    const num = parseInt(value, 10);
+    el.value = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 function formatDateBR(val) {
     if (!val) return "-";
     if (typeof val === "string" && val.includes("T")) {
@@ -942,7 +982,10 @@ function renderTable() {
                 </td>
                 <td class="px-3.5 py-3 max-w-xs">
                     <p class="font-medium text-gray-900 truncate" title="${escapeHtml(r.descricao_problema || '')}">${escapeHtml(r.descricao_problema || "-")}</p>
-                    ${r.nota_fiscal ? `<span class="inline-flex items-center text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5">NF ${r.nota_fiscal}${r.serie ? ` (Série ${r.serie})` : ''}</span>` : ''}
+                    <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        ${r.nota_fiscal ? `<span class="inline-flex items-center text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded font-mono font-medium">NF ${r.nota_fiscal}${r.serie ? ` (Série ${r.serie})` : ''}</span>` : ''}
+                        ${r.qtd_nota_kg ? `<span class="inline-flex items-center text-[10px] text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded font-semibold"><i data-lucide="scale" class="w-2.5 h-2.5 mr-1 text-blue-500"></i>${formatKg(r.qtd_nota_kg)}</span>` : ''}
+                    </div>
                 </td>
                 <td class="px-3.5 py-3 whitespace-nowrap">${prioBadge}</td>
                 <td class="px-3.5 py-3 whitespace-nowrap">${statusBadge}</td>
@@ -954,7 +997,9 @@ function renderTable() {
                         </button>
                     ` : `<span class="text-gray-300 text-xs">-</span>`}
                 </td>
-                <td class="px-3.5 py-3 text-right font-medium text-gray-800 whitespace-nowrap">${formatCurrency(r.valor_notas)}</td>
+                <td class="px-3.5 py-3 text-right whitespace-nowrap">
+                    <div class="font-bold text-emerald-700">${formatCurrency(r.valor_notas)}</div>
+                </td>
                 <td class="px-3.5 py-3 text-center whitespace-nowrap">
                     <div class="flex items-center justify-center space-x-1">
                         <button onclick="openDetailsModal(${r.id})" class="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition" title="Ver detalhes e anexos">
@@ -1222,11 +1267,11 @@ function openDetailsModal(id) {
             </div>
             <div>
                 <span class="text-gray-400 text-[10px] uppercase font-bold block">Qtd. da Nota (kg)</span>
-                <span class="font-medium text-gray-700">${r.qtd_nota_kg ? `${r.qtd_nota_kg} kg` : "-"}</span>
+                <span class="font-bold text-gray-800 text-sm">${formatKg(r.qtd_nota_kg)}</span>
             </div>
             <div>
-                <span class="text-gray-400 text-[10px] uppercase font-bold block">Valor da Nota</span>
-                <span class="font-bold text-emerald-700">${formatCurrency(r.valor_notas)}</span>
+                <span class="text-gray-400 text-[10px] uppercase font-bold block">Valor da Nota (Contabilidade)</span>
+                <span class="font-bold text-emerald-700 text-sm">${formatCurrency(r.valor_notas)}</span>
             </div>
             <div>
                 <span class="text-gray-400 text-[10px] uppercase font-bold block">Nº do Chamado</span>
@@ -1350,6 +1395,12 @@ function openEditModal(id) {
 
     const chamEl = document.getElementById("edit_numero_chamado");
     if (chamEl) chamEl.value = r.numero_chamado || "";
+
+    const qtdEl = document.getElementById("edit_qtd_nota_kg");
+    if (qtdEl) qtdEl.value = r.qtd_nota_kg ? Math.round(r.qtd_nota_kg).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+
+    const valEl = document.getElementById("edit_valor_notas");
+    if (valEl) valEl.value = r.valor_notas ? formatContabil(r.valor_notas) : "";
 
     const planoEl = document.getElementById("edit_plano_acao");
     if (planoEl) planoEl.value = r.plano_acao || "";

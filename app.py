@@ -363,7 +363,7 @@ def export_csv():
         writer.writerow([
             "ID", "Data Registro", "Data Ocorrência", "Responsável", "Setor Responsável",
             "Setor Impactado", "Filial", "Categoria da Dor", "Nota Fiscal", "Série",
-            "Descrição do Problema", "Causa Raiz", "Impacto no Negócio", "Valor Notas (R$)",
+            "Descrição do Problema", "Causa Raiz", "Impacto no Negócio", "Qtd. Da Nota (kg)", "Valor Notas (R$)",
             "Prioridade", "Status", "SLA (dias)", "Data Limite SLA", "Situação SLA",
             "Dias em Aberto", "Plano de Ação", "Prazo", "Data Conclusão", "Responsável Solução",
             "Nº Chamado", "Recorrente?", "Total Anexos", "Nomes dos Anexos"
@@ -384,7 +384,8 @@ def export_csv():
                 r.get("descricao_problema", ""),
                 r.get("causa_raiz", ""),
                 r.get("impacto_negocio", ""),
-                f"{r.get('valor_notas', 0.0):.2f}".replace(".", ","),
+                r.get("qtd_nota_kg_mask", ""),
+                r.get("valor_notas_contabil", "0,00"),
                 r.get("prioridade", ""),
                 r.get("status", ""),
                 r.get("sla_dias", ""),
