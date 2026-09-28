@@ -1,6 +1,6 @@
 # Sistema de Mapeamento de Dores & Monitoramento Operacional
 
-Aplicação web local integrada diretamente à sua base de dados Microsoft Excel (`Monitoramento_Dores - FINAL.xlsx`).
+Aplicação web local integrada diretamente à sua base de dados Microsoft Excel (`Monitoramento_Dores - FINAL.xlsx`) com suporte completo a **anexos de arquivos**, **dashboard executivo com gráficos temporais e de Pareto**, **filtros por período**, **ordenação por colunas** e **exportação em CSV**.
 
 ---
 
@@ -11,71 +11,71 @@ O servidor já está **ativo** em:
 
 Para iniciar o sistema no futuro, basta:
 1. Dar um duplo clique no arquivo: `iniciar_sistema.bat`
-2. O navegador abrirá automaticamente com o painel pronto para uso!
+2. O sistema verifica automaticamente as dependências do Python e abre o navegador!
 
 ---
 
-## 📊 Principais Funcionalidades
+## 📎 Sistema de Anexos (Novo!)
 
-### 1. Dashboard Executivo & Gráficos
-- **8 Cards de Indicadores (KPIs):**
-  - Total de Ocorrências
-  - Ocorrências Abertas / Em Tratativa
-  - Alerta de SLAs Vencidos
-  - Alerta de SLAs A Vencer (&le; 2 dias)
-  - Ocorrências Concluídas e Taxa de Resolução (%)
-  - Valor Financeiro Total das Notas (R$)
-  - Tempo Médio em Aberto (dias)
-  - Tempo Médio de Resolução (dias)
-- **6 Gráficos Interativos (Chart.js):**
-  - Distribuição por Status (Aberto, Em Análise, Em Tratativa, Aguardando Terceiros, Concluído, Cancelado)
-  - Situação de SLA (No prazo, A vencer, Vencido, Concluído)
-  - Volume de Dores por Categoria (Fiscal, Estoque, Financeiro, Faturamento, Logística, etc.)
-  - Setor Responsável atribuído
-  - Distribuição por Criticidade / Prioridade
-  - Volume por Filial (Matupá, Rondonópolis, Paranaguá)
+### 1. No Momento do Cadastro:
+- **Área Drag & Drop:** Arraste arquivos diretamente para a área indicada ou clique para selecionar.
+- **Múltiplos Arquivos:** Suporta envio simultâneo de PDFs, imagens (PNG, JPG), planilhas (XLSX, CSV), notas fiscais (XML), documentos (DOCX) e arquivos compactados (ZIP) de até 50MB.
+- **Pré-visualização:** Mostra a lista de arquivos selecionados com ícone, tamanho em KB/MB e botão para remover antes de salvar.
 
-### 2. Cadastro de Nova Pendência
-- Formulário intuitivo estruturado em 4 blocos:
-  1. **Dados Gerais:** Datas, Responsável, Filial, Setor Responsável, Setor Impactado e Categoria da Dor.
-  2. **Problema & Criticidade:** Descrição detalhada, Causa Raiz, Impacto no Negócio, Prioridade (com cálculo automático de SLA: Crítica = 2d, Alta = 5d, Média = 10d, Baixa = 15d) e Recorrência.
-  3. **Dados Fiscais & Operacionais:** Nota Fiscal, Série, Qtd em kg, Valor em R$ e Nº do Chamado.
-  4. **Plano de Ação & Solução:** Status inicial, Plano de Ação, Prazo acordado e Responsável pela Solução.
-- **Gravação Direta no Excel:** Cada pendência cadastrada é gravada imediatamente na linha correta da aba `Monitoramento de Dores`, mantendo todas as fórmulas de cálculo do Excel intactas (`ID`, `Dias em Aberto`, `SLA (dias)`, `Data Limite SLA`, `Situação SLA`, `Dias para Vencimento`).
-
-### 3. Consulta & Gestão Interativa
-- **Pesquisa Instantânea:** Filtro textual em tempo real por descrição, setor, responsável, nota fiscal, número de chamado, etc.
-- **Filtros Rápidos:** Botões de 1 clique para `Abertos`, `SLA Vencido`, `SLA A Vencer`, `Prioridade Crítica` e `Concluídos`.
-- **Filtros Combinados:** Por Status, Prioridade, Filial e SLA.
-- **Visualização Completa de Detalhes:** Modal detalhado com todos os 30 campos da base.
-- **Tratamento & Conclusão:** Permite alterar o status para `Concluído` (preenchendo a data de conclusão automaticamente), atualizar o plano de ação, adicionar observações e salvar direto no Excel.
-
-### 4. Segurança e Integridade da Base Excel
-- **Caminho Ativo:** `C:\Users\peewxx\Downloads\Monitoramento_Dores - FINAL.xlsx`
-- **Backups Automáticos:** Antes de qualquer alteração, uma cópia com carimbo de data/hora é salva na pasta `backups/`.
-- **Botão "Abrir no Excel":** Abre o arquivo nativamente no Microsoft Excel.
-- **Botão "Baixar Excel":** Permite fazer o download da planilha atualizada diretamente pelo navegador.
-- **Totalmente Offline:** Todos os scripts de gráficos e estilos estão salvos localmente.
+### 2. Na Consulta & Detalhes:
+- **Indicador na Tabela:** Ícone de clipe com contador (ex.: `📎 2`).
+- **Cards de Anexos no Modal de Detalhes:**
+  - Miniaturas para imagens/fotos.
+  - Botão **Visualizar** (abre em nova aba com visualizador nativo para PDF e imagens).
+  - Botão **Baixar** (download direto).
+  - Botão **Excluir** anexo.
+  - Botão **"+ Anexar Arquivo"** para adicionar novas evidências a qualquer momento sem precisar recadastrar a demanda.
+- **Sincronização com o Excel:** Os nomes dos arquivos anexados são salvos na **Coluna 31 (AE - Anexos)** da planilha Excel.
 
 ---
 
-## 📁 Estrutura do Projeto
+## 🌟 Principais Melhorias Implementadas
+
+### 1. Dashboard Executivo Aprimorado
+- **Filtro de Período Temporal:** Selecione entre `Todo o Histórico`, `Últimos 7 dias`, `Últimos 30 dias`, `Este Mês` ou intervalo `Personalizado` (com data inicial e final) recalculando KPIs e gráficos em tempo real.
+- **Novo Gráfico: Evolução Temporal das Dores:** Linha do tempo mostrando a curva de ocorrências cadastradas versus concluídas por mês.
+- **Novo Gráfico: Top 5 Maiores Impactos Financeiros (Pareto):** Identifica visualmente onde estão os maiores riscos financeiros.
+- **Card KPI de Evidências:** Totalizador de arquivos anexados no sistema.
+
+### 2. Gestão & Tabela de Consulta
+- **Ordenação Clicável por Coluna:** Clique em qualquer cabeçalho da tabela (ID, Datas, Setor, Filial, Prioridade, Status, Valor, Anexos) para ordenar de forma crescente ou decrescente (▲ / ▼).
+- **Filtro Exclusivo "Com Anexos":** Botão para exibir somente as pendências que possuem evidências anexadas.
+- **Ação Rápida de Conclusão (✓):** Botão direto na tabela para marcar uma pendência como Concluída com 1 clique (gravando data de encerramento no Excel).
+- **Paginação:** Seletor de 10, 25, 50 ou Todos os registros por página com navegação fluida.
+- **Exportação CSV Estruturada:** Botão "Exportar CSV" que gera relatório com codificação UTF-8 BOM (compatível com acentuação no Excel brasileiro).
+- **Impressão Executiva:** Botão "Imprimir Ficha" que formata uma ficha limpa para impressão ou PDF.
+
+### 3. Atalhos de Teclado
+- `Ctrl + K` ou `/`: Foca imediatamente na barra de pesquisa.
+- `N`: Abre o modal de cadastro de nova pendência.
+- `Esc`: Fecha qualquer modal aberto.
+
+---
+
+## 📁 Estrutura de Arquivos
 ```text
 C:\Users\peewxx\.gemini\antigravity\scratch\gestao_dores\
-  ├── app.py                     # Servidor Flask com endpoints REST
-  ├── excel_manager.py           # Leitura, escrita, fórmulas e backups da planilha
+  ├── app.py                     # Servidor Flask com endpoints REST e upload
+  ├── excel_manager.py           # Gestor da planilha, fórmulas e anexos
   ├── iniciar_sistema.bat        # Inicializador rápido para Windows
   ├── requirements.txt           # Dependências Python
+  ├── uploads/                   # Pasta com os arquivos anexados organizados por ID
+  │   └── <id>/<arquivo>
   ├── templates/
-  │   └── index.html             # Interface web moderna SPA
+  │   └── index.html             # Interface web completa
   ├── static/
   │   ├── css/
   │   │   ├── tailwind.min.css   # Framework CSS local
-  │   │   └── style.css          # Estilos personalizados e badges
+  │   │   └── style.css          # Estilos customizados e dropzones
   │   └── js/
-  │       ├── chart.min.js       # Gráficos interativos locais
+  │       ├── chart.min.js       # Gráficos locais
   │       ├── lucide.min.js      # Ícones locais
   │       └── app.js             # Lógica e interatividade do sistema
-  ├── data/                      # Cópia sincronizada da base
+  ├── data/                      # Cópia de trabalho da base Excel
   └── backups/                   # Histórico de backups automáticos
 ```

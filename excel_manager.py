@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import datetime
 from typing import Dict, List, Any, Optional
@@ -11,6 +12,7 @@ PRIMARY_FILE_PATH = os.path.join(USER_DOWNLOADS, "Monitoramento_Dores - FINAL.xl
 PROJECT_ROOT_PATH = os.path.join(os.path.dirname(__file__), "Monitoramento_Dores - FINAL.xlsx")
 FALLBACK_FILE_PATH = os.path.join(os.path.dirname(__file__), "data", "Monitoramento_Dores - FINAL.xlsx")
 BACKUP_DIR = os.path.join(os.path.dirname(__file__), "backups")
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 
 COLUMN_MAPPING = {
     1: "id",
@@ -43,6 +45,7 @@ COLUMN_MAPPING = {
     28: "responsavel_solucao",
     29: "numero_chamado",
     30: "ultima_atualizacao",
+    31: "anexos",
 }
 
 FIELD_TO_COL = {v: k for k, v in COLUMN_MAPPING.items()}
@@ -57,6 +60,124 @@ PRIORITY_SLA_MAP = {
 }
 
 
+def sanitize_filename(name: str) -> str:
+    """Cleans filename to prevent path traversal and unsafe characters."""
+    name = os.path.basename(name).strip()
+    name = re.sub(r'[\\/*?:"<>|]', "", name)
+    name = name.replace(" ", "_")
+    return name or "anexo"
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Formats raw bytes into human readable KB / MB."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{round(size_bytes / 1024, 1)} KB"
+    else:
+        return f"{round(size_bytes / (1024 * 1024), 2)} MB"
+
+
+def get_record_attachments(record_id: int) -> List[Dict[str, Any]]:
+    """Lists all files attached to a specific record ID with rich metadata."""
+    rec_dir = os.path.join(UPLOADS_DIR, str(record_id))
+    if not os.path.exists(rec_dir):
+        return []
+
+    attachments = []
+    for fname in sorted(os.listdir(rec_dir)):
+        fpath = os.path.join(rec_dir, fname)
+        if os.path.isfile(fpath):
+            try:
+                sz = os.path.getsize(fpath)
+                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(fpath)).strftime("%d/%m/%Y %H:%M")
+                _, ext = os.path.splitext(fname)
+                ext_lower = ext.lower()
+
+                is_img = ext_lower in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"]
+                is_pdf = ext_lower == ".pdf"
+                is_excel = ext_lower in [".xlsx", ".xls", ".csv"]
+                is_word = ext_lower in [".doc", ".docx"]
+
+                attachments.append({
+                    "filename": fname,
+                    "size_bytes": sz,
+                    "size_formatted": format_file_size(sz),
+                    "extension": ext_lower,
+                    "uploaded_at": mtime,
+                    "url": f"/api/attachments/{record_id}/{fname}",
+                    "is_image": is_img,
+                    "is_pdf": is_pdf,
+                    "is_excel": is_excel,
+                    "is_word": is_word
+                })
+            except Exception:
+                pass
+    return attachments
+
+
+def sync_excel_attachments_column(record_id: int):
+    """Syncs the attachment filenames into Column 31 (Anexos) of the Excel file."""
+    try:
+        file_path = get_active_excel_path()
+        attachments = get_record_attachments(record_id)
+        names = ", ".join([a["filename"] for a in attachments])
+
+        wb = openpyxl.load_workbook(file_path)
+        ws = wb["Monitoramento de Dores"]
+        if ws.cell(1, 31).value != "Anexos":
+            ws.cell(1, 31, "Anexos")
+
+        for r in range(2, ws.max_row + 1):
+            if r - 1 == record_id:
+                ws.cell(r, 31, names if names else None)
+                break
+
+        wb.save(file_path)
+        wb.close()
+    except Exception as e:
+        print(f"Notice: sync_excel_attachments_column: {e}")
+
+
+def save_record_attachments(record_id: int, files: List[Any]) -> List[Dict[str, Any]]:
+    """Saves a list of uploaded FileStorage objects to uploads/<record_id>/."""
+    rec_dir = os.path.join(UPLOADS_DIR, str(record_id))
+    os.makedirs(rec_dir, exist_ok=True)
+
+    saved_names = []
+    for file_obj in files:
+        if not file_obj or not getattr(file_obj, "filename", None):
+            continue
+        original_name = file_obj.filename
+        safe_name = sanitize_filename(original_name)
+        base, ext = os.path.splitext(safe_name)
+
+        target_path = os.path.join(rec_dir, safe_name)
+        counter = 1
+        while os.path.exists(target_path):
+            safe_name = f"{base}_{counter}{ext}"
+            target_path = os.path.join(rec_dir, safe_name)
+            counter += 1
+
+        file_obj.save(target_path)
+        saved_names.append(safe_name)
+
+    sync_excel_attachments_column(record_id)
+    return get_record_attachments(record_id)
+
+
+def delete_record_attachment(record_id: int, filename: str) -> bool:
+    """Deletes an attachment file for a record and syncs with Excel."""
+    rec_dir = os.path.join(UPLOADS_DIR, str(record_id))
+    safe_name = os.path.basename(filename)
+    target_path = os.path.join(rec_dir, safe_name)
+    if os.path.exists(target_path) and os.path.isfile(target_path):
+        os.remove(target_path)
+        sync_excel_attachments_column(record_id)
+        return True
+    return False
+
+
 def get_active_excel_path() -> str:
     """
     Returns the most appropriate Excel file path available on the computer:
@@ -64,16 +185,12 @@ def get_active_excel_path() -> str:
     2. Project root folder (if placed next to app.py)
     3. Project data/ folder (bundled working copy)
     """
-    # 1. Downloads folder of current user
     if os.path.exists(PRIMARY_FILE_PATH):
         return PRIMARY_FILE_PATH
-    # 2. Project root folder
     if os.path.exists(PROJECT_ROOT_PATH):
         return PROJECT_ROOT_PATH
-    # 3. Project data/ folder
     if os.path.exists(FALLBACK_FILE_PATH):
         return FALLBACK_FILE_PATH
-    # Default fallback
     return FALLBACK_FILE_PATH
 
 
@@ -106,27 +223,22 @@ def get_parameters() -> Dict[str, Any]:
     sla_map = {}
 
     for r in range(2, ws.max_row + 1):
-        # Col 1: Status
         v1 = ws.cell(r, 1).value
         if v1 and str(v1).strip():
             statuses.append(str(v1).strip())
 
-        # Col 3: Prioridade
         v3 = ws.cell(r, 3).value
         if v3 and str(v3).strip():
             prioridades.append(str(v3).strip())
 
-        # Col 5: Recorrente?
         v5 = ws.cell(r, 5).value
         if v5 and str(v5).strip():
             recorrentes.append(str(v5).strip())
 
-        # Col 7: Categoria da Dor
         v7 = ws.cell(r, 7).value
         if v7 and str(v7).strip():
             categorias.append(str(v7).strip())
 
-        # Col 10 & 11: Prioridade & SLA (dias)
         v10 = ws.cell(r, 10).value
         v11 = ws.cell(r, 11).value
         if v10 and v11 is not None and str(v10).strip() in ["Baixa", "Média", "Media", "Alta", "Crítica", "Critica"]:
@@ -135,19 +247,16 @@ def get_parameters() -> Dict[str, Any]:
             except (ValueError, TypeError):
                 pass
 
-        # Col 13: Setor
         v13 = ws.cell(r, 13).value
         if v13 and str(v13).strip():
             setores.append(str(v13).strip())
 
-        # Col 15: Filial
         v15 = ws.cell(r, 15).value
         if v15 and str(v15).strip():
             filiais.append(str(v15).strip())
 
     wb.close()
 
-    # Defaults if sheet values were sparse
     if not statuses:
         statuses = ["Aberto", "Em Análise", "Em Tratativa", "Aguardando Terceiros", "Concluído", "Cancelado"]
     if not prioridades:
@@ -186,7 +295,6 @@ def parse_date(val: Any) -> Optional[datetime.date]:
         val = val.strip()
         if not val or val.startswith("="):
             return None
-        # Try formats: YYYY-MM-DD, DD/MM/YYYY, etc.
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
             try:
                 return datetime.datetime.strptime(val, fmt).date()
@@ -196,31 +304,17 @@ def parse_date(val: Any) -> Optional[datetime.date]:
 
 
 def format_date_iso(val: Any) -> Optional[str]:
-    """Returns YYYY-MM-DD or None."""
     d = parse_date(val)
     return d.isoformat() if d else None
 
 
 def format_date_br(val: Any) -> Optional[str]:
-    """Returns DD/MM/YYYY or None."""
     d = parse_date(val)
     return d.strftime("%d/%m/%Y") if d else None
 
 
 def compute_derived_fields(record: Dict[str, Any], sla_map: Dict[str, int]) -> Dict[str, Any]:
-    """
-    Computes SLA days, Data Limite SLA, Situação SLA, Dias em Aberto, Dias para Vencimento.
-    Matches the exact Excel logic:
-    - SLA: looked up from priority
-    - Data Limite SLA: data_registro + sla_dias
-    - Dias em Aberto: (data_conclusao - data_registro) if data_conclusao else (today - data_registro)
-    - Situacao SLA:
-        * If status == 'Concluído': 'Concluído'
-        * If data_limite < today: 'Vencido'
-        * If data_limite - today <= 2: 'A vencer'
-        * Else: 'No prazo'
-    - Dias para Vencimento: (data_limite - today) if status != 'Concluído' else None
-    """
+    """Computes SLA days, Data Limite SLA, Situação SLA, Dias em Aberto, Dias para Vencimento."""
     today = datetime.date.today()
     reg_date = parse_date(record.get("data_registro"))
     conc_date = parse_date(record.get("data_conclusao"))
@@ -230,14 +324,12 @@ def compute_derived_fields(record: Dict[str, Any], sla_map: Dict[str, int]) -> D
     sla_days = sla_map.get(prio, PRIORITY_SLA_MAP.get(prio, 5))
     record["sla_dias"] = sla_days
 
-    # Data Limite SLA
     limite_date = None
     if reg_date and sla_days is not None:
         limite_date = reg_date + datetime.timedelta(days=sla_days)
     record["data_limite_sla"] = limite_date.isoformat() if limite_date else None
     record["data_limite_sla_br"] = limite_date.strftime("%d/%m/%Y") if limite_date else "-"
 
-    # Dias em Aberto
     if reg_date:
         if conc_date:
             dias_aberto = (conc_date - reg_date).days
@@ -247,7 +339,6 @@ def compute_derived_fields(record: Dict[str, Any], sla_map: Dict[str, int]) -> D
     else:
         record["dias_aberto"] = 0
 
-    # Situação SLA & Dias para Vencimento
     if status == "Concluído":
         record["situacao_sla"] = "Concluído"
         record["dias_para_vencimento"] = None
@@ -277,38 +368,30 @@ def get_all_records() -> List[Dict[str, Any]]:
     ws = wb["Monitoramento de Dores"]
 
     records = []
-    # Row 1 is header. Rows 2..max_row contain data or pre-filled formula templates.
     for r in range(2, ws.max_row + 1):
-        # Check if row has meaningful data.
-        # Column 3 is Data de Registro, Column 4 is Responsável, Column 11 is Descrição
         c_reg = ws.cell(r, 3).value
         c_resp = ws.cell(r, 4).value
         c_desc = ws.cell(r, 11).value
 
-        # If all essential data fields are empty or None, skip row
         if c_reg is None and c_resp is None and c_desc is None:
             continue
 
         item = {"_excel_row": r}
         for col_idx, field_name in COLUMN_MAPPING.items():
             cell_val = ws.cell(r, col_idx).value
-            # If the cell holds an Excel error like #VALUE! or #N/A, convert to None
             if isinstance(cell_val, str) and cell_val.startswith("#"):
                 cell_val = None
             item[field_name] = cell_val
 
-        # Ensure ID
         try:
             item["id"] = int(item["id"]) if item["id"] is not None else (r - 1)
         except (ValueError, TypeError):
             item["id"] = r - 1
 
-        # Dates formatting
         for df in ["data_ocorrencia", "data_registro", "prazo", "data_conclusao", "ultima_atualizacao"]:
             item[f"{df}_iso"] = format_date_iso(item.get(df))
             item[f"{df}_br"] = format_date_br(item.get(df)) or "-"
 
-        # Numerical fields
         for nf in ["nota_fiscal", "serie", "qtd_nota_kg", "numero_chamado"]:
             try:
                 item[nf] = int(item[nf]) if item[nf] is not None and str(item[nf]).strip() != "" else None
@@ -320,8 +403,13 @@ def get_all_records() -> List[Dict[str, Any]]:
         except (ValueError, TypeError):
             item["valor_notas"] = 0.0
 
-        # Compute SLA and derived fields
         compute_derived_fields(item, sla_map)
+
+        # Attachments metadata
+        rec_attachments = get_record_attachments(item["id"])
+        item["anexos"] = rec_attachments
+        item["total_anexos"] = len(rec_attachments)
+        item["anexos_nomes"] = ", ".join([a["filename"] for a in rec_attachments])
 
         records.append(item)
 
@@ -330,7 +418,7 @@ def get_all_records() -> List[Dict[str, Any]]:
 
 
 def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Calculates all executive metrics and KPIs from the records."""
+    """Calculates all executive metrics and KPIs, plus timeline and Pareto distributions."""
     total = len(records)
     abertas = 0
     concluidas = 0
@@ -342,6 +430,8 @@ def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     soma_dias_resolucao = 0
     count_concluidas_com_dias = 0
     count_abertas = 0
+    total_com_anexos = 0
+    total_arquivos = 0
 
     by_status = {}
     by_situacao_sla = {"No prazo": 0, "A vencer": 0, "Vencido": 0, "Concluído": 0}
@@ -351,6 +441,9 @@ def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     by_filial = {}
     by_prioridade = {"Crítica": 0, "Alta": 0, "Média": 0, "Baixa": 0}
     by_recorrente = {"Sim": 0, "Não": 0}
+
+    # Timeline dictionary by Month (YYYY-MM)
+    timeline_dict = {}
 
     for rec in records:
         st = rec.get("status") or "Aberto"
@@ -403,9 +496,42 @@ def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         if rec_val in by_recorrente:
             by_recorrente[rec_val] += 1
 
+        # Attachments count
+        if rec.get("total_anexos", 0) > 0:
+            total_com_anexos += 1
+            total_arquivos += rec.get("total_anexos", 0)
+
+        # Timeline calculation
+        reg_iso = rec.get("data_registro_iso")
+        if reg_iso:
+            month_key = reg_iso[:7]  # YYYY-MM
+            if month_key not in timeline_dict:
+                timeline_dict[month_key] = {"registradas": 0, "concluidas": 0}
+            timeline_dict[month_key]["registradas"] += 1
+            if st == "Concluído":
+                timeline_dict[month_key]["concluidas"] += 1
+
     tempo_medio_aberto = round(soma_dias_aberto / count_abertas, 1) if count_abertas > 0 else 0
     tempo_medio_resolucao = round(soma_dias_resolucao / count_concluidas_com_dias, 1) if count_concluidas_com_dias > 0 else 0
     taxa_resolucao = round((concluidas / total) * 100, 1) if total > 0 else 0
+
+    # Sort timeline
+    sorted_months = sorted(timeline_dict.keys())
+    timeline_labels = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in sorted_months]
+    timeline_registradas = [timeline_dict[m]["registradas"] for m in sorted_months]
+    timeline_concluidas = [timeline_dict[m]["concluidas"] for m in sorted_months]
+
+    # Top financial impacts (Pareto)
+    sorted_financial = sorted(records, key=lambda x: x.get("valor_notas", 0.0), reverse=True)[:5]
+    top_financeiro = [{
+        "id": r["id"],
+        "filial": r.get("filial", "-"),
+        "categoria": r.get("categoria_dor", "-"),
+        "descricao": r.get("descricao_problema", "-")[:45] + ("..." if len(r.get("descricao_problema", "")) > 45 else ""),
+        "valor": r.get("valor_notas", 0.0),
+        "status": r.get("status", "Aberto"),
+        "prioridade": r.get("prioridade", "Média")
+    } for r in sorted_financial if r.get("valor_notas", 0.0) > 0]
 
     return {
         "total_ocorrencias": total,
@@ -418,6 +544,8 @@ def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         "valor_total_notas": valor_total,
         "tempo_medio_aberto": tempo_medio_aberto,
         "tempo_medio_resolucao": tempo_medio_resolucao,
+        "total_com_anexos": total_com_anexos,
+        "total_arquivos": total_arquivos,
         "by_status": by_status,
         "by_situacao_sla": by_situacao_sla,
         "by_categoria": by_categoria,
@@ -426,13 +554,20 @@ def calculate_kpis(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         "by_filial": by_filial,
         "by_prioridade": by_prioridade,
         "by_recorrente": by_recorrente,
+        "timeline": {
+            "labels": timeline_labels,
+            "registradas": timeline_registradas,
+            "concluidas": timeline_concluidas
+        },
+        "top_financeiro": top_financeiro
     }
 
 
-def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
+def add_record(form_data: Dict[str, Any], files: Optional[List[Any]] = None) -> Dict[str, Any]:
     """
     Inserts a new record into 'Monitoramento de Dores' sheet in the Excel file.
-    Preserves existing formulas, sets values, and writes formulas for calculated fields.
+    Preserves existing formulas, sets values, writes formulas for calculated fields,
+    and saves any attached files into uploads/<id>/.
     """
     file_path = get_active_excel_path()
     create_backup(file_path)
@@ -440,7 +575,10 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     wb = openpyxl.load_workbook(file_path)
     ws = wb["Monitoramento de Dores"]
 
-    # Find the target row: first row where Col C (Data de Registro) and Col D are empty
+    # Ensure Col 31 header
+    if ws.cell(1, 31).value != "Anexos":
+        ws.cell(1, 31, "Anexos")
+
     target_row = None
     for r in range(2, max(ws.max_row + 2, 1002)):
         c_reg = ws.cell(r, 3).value
@@ -453,7 +591,9 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     if target_row is None:
         target_row = ws.max_row + 1
 
-    # Form field parsing
+    r = target_row
+    new_id = r - 1
+
     dt_ocorrencia = parse_date(form_data.get("data_ocorrencia")) or datetime.date.today()
     dt_registro = parse_date(form_data.get("data_registro")) or datetime.date.today()
     dt_prazo = parse_date(form_data.get("prazo"))
@@ -466,7 +606,6 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     filial = (form_data.get("filial") or "").strip()
     categoria_dor = (form_data.get("categoria_dor") or "").strip()
 
-    # Numbers
     try:
         nota_fiscal = int(form_data.get("nota_fiscal")) if form_data.get("nota_fiscal") not in (None, "") else None
     except (ValueError, TypeError):
@@ -502,8 +641,26 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     observacoes = form_data.get("observacoes") or ""
     resp_solucao = (form_data.get("responsavel_solucao") or "").strip()
 
+    # Save uploaded files if provided
+    saved_filenames = []
+    if files:
+        rec_dir = os.path.join(UPLOADS_DIR, str(new_id))
+        os.makedirs(rec_dir, exist_ok=True)
+        for f in files:
+            if not f or not getattr(f, "filename", None):
+                continue
+            s_name = sanitize_filename(f.filename)
+            base, ext = os.path.splitext(s_name)
+            t_path = os.path.join(rec_dir, s_name)
+            cnt = 1
+            while os.path.exists(t_path):
+                s_name = f"{base}_{cnt}{ext}"
+                t_path = os.path.join(rec_dir, s_name)
+                cnt += 1
+            f.save(t_path)
+            saved_filenames.append(s_name)
+
     # Set cell values
-    r = target_row
     ws.cell(r, 1, f'=IF(C{r}="","",ROW()-1)')
     ws.cell(r, 2, datetime.datetime.combine(dt_ocorrencia, datetime.time.min))
     ws.cell(r, 3, datetime.datetime.combine(dt_registro, datetime.time.min))
@@ -534,6 +691,7 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     ws.cell(r, 28, resp_solucao)
     ws.cell(r, 29, numero_chamado)
     ws.cell(r, 30, datetime.datetime.combine(dt_atualizacao, datetime.time.min))
+    ws.cell(r, 31, ", ".join(saved_filenames) if saved_filenames else None)
 
     try:
         wb.save(file_path)
@@ -552,7 +710,6 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
 
     wb.close()
 
-    # Also sync to fallback copy if writing to primary
     if file_path == PRIMARY_FILE_PATH and os.path.exists(os.path.dirname(FALLBACK_FILE_PATH)):
         try:
             shutil.copy2(PRIMARY_FILE_PATH, FALLBACK_FILE_PATH)
@@ -562,16 +719,14 @@ def add_record(form_data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "success": True,
         "row": r,
-        "id": r - 1,
-        "message": f"Pendência #{r - 1} cadastrada com sucesso diretamente no arquivo Excel!"
+        "id": new_id,
+        "attachments_count": len(saved_filenames),
+        "message": f"Pendência #{new_id} cadastrada com sucesso diretamente no arquivo Excel!"
     }
 
 
 def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Updates an existing record in the Excel file by its ID.
-    Supports updating status, solution plan, dates, and all details.
-    """
+    """Updates an existing record in the Excel file by its ID."""
     file_path = get_active_excel_path()
     create_backup(file_path)
 
@@ -580,9 +735,6 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
 
     target_row = None
     for r in range(2, ws.max_row + 1):
-        # ID is row - 1 or cell value
-        cell_id = ws.cell(r, 1).value
-        # If cell_id is integer or string matching record_id or if row-1 matches
         if r - 1 == record_id:
             target_row = r
             break
@@ -593,7 +745,6 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
 
     r = target_row
 
-    # String & Dropdown fields
     if "responsavel" in form_data and form_data["responsavel"] is not None:
         ws.cell(r, 4, str(form_data["responsavel"]).strip().upper())
 
@@ -624,7 +775,6 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
     if "status" in form_data and form_data["status"]:
         new_status = str(form_data["status"]).strip()
         ws.cell(r, 17, new_status)
-        # If set to Concluído and no conclusion date was supplied, auto-fill today
         if new_status == "Concluído" and not ws.cell(r, 20).value and not form_data.get("data_conclusao"):
             ws.cell(r, 20, datetime.datetime.combine(datetime.date.today(), datetime.time.min))
 
@@ -648,7 +798,6 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
     if "responsavel_solucao" in form_data:
         ws.cell(r, 28, (form_data["responsavel_solucao"] or "").strip())
 
-    # Numbers
     if "nota_fiscal" in form_data:
         try:
             ws.cell(r, 9, int(form_data["nota_fiscal"]) if form_data["nota_fiscal"] not in (None, "") else None)
@@ -679,15 +828,22 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, TypeError):
             ws.cell(r, 29, form_data["numero_chamado"])
 
-    # Ensure Excel formulas in computed columns
+    # Ensure Col 31 header
+    if ws.cell(1, 31).value != "Anexos":
+        ws.cell(1, 31, "Anexos")
+
+    # Update attachment names in Col 31
+    existing_attachments = get_record_attachments(record_id)
+    if existing_attachments:
+        ws.cell(r, 31, ", ".join([a["filename"] for a in existing_attachments]))
+
+    # Formulas
     ws.cell(r, 1, f'=IF(C{r}="","",ROW()-1)')
     ws.cell(r, 21, f'=IF(C{r}="","",IF(T{r}="",TODAY()-C{r},T{r}-C{r}))')
     ws.cell(r, 24, f'=IF(P{r}="","",IFERROR(VLOOKUP(P{r},Parâmetros!$J$2:$K$5,2,FALSE),""))')
     ws.cell(r, 25, f'=IF(OR(C{r}="",X{r}=""),"",C{r}+X{r})')
     ws.cell(r, 26, f'=IF(C{r}="","",IF(Q{r}="Concluído","Concluído",IF(Y{r}<TODAY(),"Vencido",IF(Y{r}-TODAY()<=2,"A vencer","No prazo"))))')
     ws.cell(r, 27, f'=IF(OR(Y{r}="",Q{r}="Concluído"),"",Y{r}-TODAY())')
-
-    # Update date
     ws.cell(r, 30, datetime.datetime.combine(datetime.date.today(), datetime.time.min))
 
     try:
@@ -704,7 +860,6 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
 
     wb.close()
 
-    # Sync
     if file_path == PRIMARY_FILE_PATH and os.path.exists(os.path.dirname(FALLBACK_FILE_PATH)):
         try:
             shutil.copy2(PRIMARY_FILE_PATH, FALLBACK_FILE_PATH)
@@ -717,3 +872,12 @@ def update_record(record_id: int, form_data: Dict[str, Any]) -> Dict[str, Any]:
         "id": record_id,
         "message": f"Registro #{record_id} atualizado com sucesso no Excel!"
     }
+
+
+def quick_complete_record(record_id: int, obs: str = "") -> Dict[str, Any]:
+    """Quick 1-click completion of a record."""
+    return update_record(record_id, {
+        "status": "Concluído",
+        "data_conclusao": datetime.date.today().isoformat(),
+        "observacoes": obs
+    })

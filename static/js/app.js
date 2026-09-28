@@ -1,4 +1,4 @@
-// State
+// State Management
 let allRecords = [];
 let filteredRecords = [];
 let appParameters = {};
@@ -6,11 +6,33 @@ let appStatus = {};
 let charts = {};
 let activeQuickFilter = '';
 let currentRecordInDetail = null;
+let onlyWithAnexos = false;
 
-// Initialize when DOM ready
+// Pagination & Sorting State
+let currentPage = 1;
+let pageSize = 25;
+let currentSortColumn = 'id';
+let currentSortDirection = 'desc';
+
+// Selected Files for Upload
+const selectedFiles = {
+    cad: [],
+    modal: []
+};
+
+// Date Filter State
+let activePeriodFilter = {
+    type: 'all',
+    data_inicio: null,
+    data_fim: null
+};
+
+// Initialization
 document.addEventListener("DOMContentLoaded", async () => {
     lucide.createIcons();
     setDefaultFormDates();
+    setupDropzones();
+    setupKeyboardShortcuts();
     await loadParameters();
     await loadStatus();
     await refreshAllData();
@@ -41,6 +63,13 @@ function formatDateBR(val) {
         return `${d}/${m}/${y}`;
     }
     return val;
+}
+
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
 }
 
 function setDefaultFormDates() {
@@ -81,6 +110,28 @@ function showToast(message, type = "info") {
     }, 4500);
 }
 
+// Keyboard Shortcuts (Ctrl+K, N)
+function setupKeyboardShortcuts() {
+    document.addEventListener("keydown", (e) => {
+        // Focus Search with Ctrl+K or /
+        if ((e.ctrlKey && e.key === "k") || (e.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA")) {
+            e.preventDefault();
+            switchTab("consulta");
+            const searchInput = document.getElementById("filter-search");
+            searchInput?.focus();
+            searchInput?.select();
+        }
+        // Open New Modal with 'n' when not typing in form
+        if (e.key === "n" && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+            const newModal = document.getElementById("modal-nova-pendencia");
+            if (newModal && newModal.classList.contains("hidden")) {
+                e.preventDefault();
+                openNewModal();
+            }
+        }
+    });
+}
+
 // Tab Switching
 function switchTab(tabName) {
     const tabs = ["dashboard", "consulta", "cadastro", "status"];
@@ -102,6 +153,102 @@ function switchTab(tabName) {
     lucide.createIcons();
 }
 
+// Dropzone & File Handling
+function setupDropzones() {
+    ['cad', 'modal'].forEach(prefix => {
+        const dropzone = document.getElementById(`${prefix}-dropzone`);
+        if (!dropzone) return;
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFilesAdded(files, prefix);
+        }, false);
+    });
+}
+
+function triggerFileInput(inputId) {
+    const input = document.getElementById(inputId);
+    input?.click();
+}
+
+function handleFileSelect(event, prefix) {
+    const files = event.target.files;
+    handleFilesAdded(files, prefix);
+}
+
+function handleFilesAdded(files, prefix) {
+    if (!files || files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        // Avoid duplicate by name and size
+        const exists = selectedFiles[prefix].some(item => item.name === f.name && item.size === f.size);
+        if (!exists) {
+            selectedFiles[prefix].push(f);
+        }
+    }
+    renderSelectedFiles(prefix);
+}
+
+function removeSelectedFile(prefix, index) {
+    selectedFiles[prefix].splice(index, 1);
+    renderSelectedFiles(prefix);
+}
+
+function clearSelectedFiles(prefix) {
+    selectedFiles[prefix] = [];
+    renderSelectedFiles(prefix);
+}
+
+function renderSelectedFiles(prefix) {
+    const container = document.getElementById(`${prefix}-file-preview-list`);
+    if (!container) return;
+
+    if (selectedFiles[prefix].length === 0) {
+        container.innerHTML = "";
+        return;
+    }
+
+    container.innerHTML = selectedFiles[prefix].map((f, idx) => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        let iconName = "file";
+        let iconColor = "text-gray-500";
+        if (["pdf"].includes(ext)) { iconName = "file-text"; iconColor = "text-red-500"; }
+        else if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) { iconName = "image"; iconColor = "text-purple-500"; }
+        else if (["xlsx", "xls", "csv"].includes(ext)) { iconName = "sheet"; iconColor = "text-green-500"; }
+        else if (["doc", "docx"].includes(ext)) { iconName = "file-text"; iconColor = "text-blue-500"; }
+
+        return `
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-gray-200 shadow-2xs text-xs">
+                <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor}"></i>
+                <span class="font-medium text-gray-800 max-w-[180px] truncate" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+                <span class="text-[10px] text-gray-400">(${formatFileSize(f.size)})</span>
+                <button type="button" onclick="removeSelectedFile('${prefix}', ${idx})" class="p-0.5 text-gray-400 hover:text-red-500 transition rounded-full ml-1">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        `;
+    }).join("");
+
+    lucide.createIcons();
+}
+
 // Parameters Loading
 async function loadParameters() {
     try {
@@ -120,12 +267,10 @@ function populateDropdowns() {
     const p = appParameters;
     if (!p) return;
 
-    // Filter dropdowns
     populateSelect("filter-status", p.status || [], "Status: Todos");
     populateSelect("filter-prioridade", p.prioridade || [], "Prioridade: Todas");
     populateSelect("filter-filial", p.filial || [], "Filial: Todas");
 
-    // Modal & Form dropdowns
     ["cad", "modal"].forEach(prefix => {
         populateSelect(`${prefix}_filial`, p.filial || []);
         populateSelect(`${prefix}_setor_responsavel`, p.setor || []);
@@ -135,11 +280,9 @@ function populateDropdowns() {
         populateSelect(`${prefix}_status`, p.status || []);
     });
 
-    // Edit Modal
     populateSelect("edit_status", p.status || []);
     populateSelect("edit_prioridade", p.prioridade || []);
 
-    // Set preview
     updateSlaBadgePreview("cad");
     updateSlaBadgePreview("modal");
 }
@@ -196,6 +339,9 @@ async function loadStatus() {
 
         const countEl = document.getElementById("status-backupcount");
         if (countEl) countEl.textContent = `${appStatus.backup_count || 0} versões`;
+
+        const attCountEl = document.getElementById("status-attachmentcount");
+        if (attCountEl) attCountEl.textContent = `${appStatus.total_attachments || 0} arquivos salvos`;
     } catch (e) {
         console.error("Error loading status:", e);
     }
@@ -208,12 +354,73 @@ async function refreshAllData() {
 
     try {
         await Promise.all([loadRecords(), loadKpis(), loadStatus()]);
-        showToast("Dados atualizados da planilha Excel com sucesso!", "success");
+        showToast("Dados e anexos sincronizados com sucesso!", "success");
     } catch (e) {
-        showToast("Erro ao sincronizar com a planilha: " + e.message, "error");
+        showToast("Erro ao sincronizar dados: " + e.message, "error");
     } finally {
         if (refreshBtn) refreshBtn.classList.remove("animate-spin");
     }
+}
+
+// Date Range Filtering in Dashboard
+function handlePeriodChange() {
+    const sel = document.getElementById("dash-period-select");
+    const customDiv = document.getElementById("dash-custom-dates");
+    const labelEl = document.getElementById("dash-period-label");
+    const val = sel.value;
+
+    const today = new Date();
+    let start = null;
+    let end = today.toISOString().split("T")[0];
+
+    if (val === "all") {
+        customDiv?.classList.add("hidden");
+        labelEl.textContent = "Exibindo todo o histórico";
+        activePeriodFilter = { type: 'all', data_inicio: null, data_fim: null };
+    } else if (val === "7d") {
+        customDiv?.classList.add("hidden");
+        const d7 = new Date();
+        d7.setDate(today.getDate() - 7);
+        start = d7.toISOString().split("T")[0];
+        labelEl.textContent = "Últimos 7 dias";
+        activePeriodFilter = { type: '7d', data_inicio: start, data_fim: end };
+    } else if (val === "30d") {
+        customDiv?.classList.add("hidden");
+        const d30 = new Date();
+        d30.setDate(today.getDate() - 30);
+        start = d30.toISOString().split("T")[0];
+        labelEl.textContent = "Últimos 30 dias";
+        activePeriodFilter = { type: '30d', data_inicio: start, data_fim: end };
+    } else if (val === "month") {
+        customDiv?.classList.add("hidden");
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        start = firstDay.toISOString().split("T")[0];
+        labelEl.textContent = "Este Mês";
+        activePeriodFilter = { type: 'month', data_inicio: start, data_fim: end };
+    } else if (val === "custom") {
+        customDiv?.classList.remove("hidden");
+        labelEl.textContent = "Período Personalizado";
+        return;
+    }
+
+    loadKpis();
+    applyFilters();
+}
+
+function applyCustomDateFilter() {
+    const s = document.getElementById("dash-date-start")?.value;
+    const e = document.getElementById("dash-date-end")?.value;
+    if (!s && !e) {
+        showToast("Selecione pelo menos uma data para o filtro.", "warning");
+        return;
+    }
+    activePeriodFilter = { type: 'custom', data_inicio: s || null, data_fim: e || null };
+    const labelEl = document.getElementById("dash-period-label");
+    if (labelEl) {
+        labelEl.textContent = `De ${formatDateBR(s)} até ${formatDateBR(e)}`;
+    }
+    loadKpis();
+    applyFilters();
 }
 
 // Load Records
@@ -229,7 +436,13 @@ async function loadRecords() {
 
 // Load KPIs
 async function loadKpis() {
-    const res = await fetch("/api/kpis");
+    let url = "/api/kpis";
+    const params = new URLSearchParams();
+    if (activePeriodFilter.data_inicio) params.append("data_inicio", activePeriodFilter.data_inicio);
+    if (activePeriodFilter.data_fim) params.append("data_fim", activePeriodFilter.data_fim);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const res = await fetch(url);
     const json = await res.json();
     if (json.success) {
         updateKpiDisplay(json.data);
@@ -245,9 +458,8 @@ function updateKpiDisplay(k) {
     document.getElementById("kpi-sla-avencer").textContent = k.sla_a_vencer || 0;
     document.getElementById("kpi-valor-total").textContent = formatCurrency(k.valor_total_notas || 0);
     document.getElementById("kpi-tempo-aberto").textContent = `${k.tempo_medio_aberto || 0} d`;
-    document.getElementById("kpi-tempo-resolucao").textContent = `${k.tempo_medio_resolucao || 0} d`;
+    document.getElementById("kpi-total-anexos").textContent = k.total_arquivos || 0;
 
-    // Banner logic
     const banner = document.getElementById("urgent-banner");
     const bannerText = document.getElementById("urgent-banner-text");
     if (k.sla_vencido > 0) {
@@ -262,15 +474,13 @@ function updateKpiDisplay(k) {
     renderChartsWithData(k);
 }
 
-// Charts
+// Charts Rendering
 function renderCharts() {
-    if (appParameters) {
-        // Redraw current
-    }
+    // Redraw if needed
 }
 
 function renderChartsWithData(k) {
-    // Chart 1: Status Donut
+    // 1. Status Donut
     const statusCtx = document.getElementById("chartStatus")?.getContext("2d");
     if (statusCtx) {
         if (charts.status) charts.status.destroy();
@@ -282,9 +492,7 @@ function renderChartsWithData(k) {
                 labels: labels.length ? labels : ["Sem dados"],
                 datasets: [{
                     data: data.length ? data : [1],
-                    backgroundColor: [
-                        "#3b82f6", "#f59e0b", "#8b5cf6", "#f97316", "#10b981", "#64748b"
-                    ],
+                    backgroundColor: ["#3b82f6", "#f59e0b", "#8b5cf6", "#f97316", "#10b981", "#64748b"],
                     borderWidth: 2,
                     borderColor: "#ffffff"
                 }]
@@ -292,15 +500,13 @@ function renderChartsWithData(k) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } }
-                },
+                plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
                 cutout: "68%"
             }
         });
     }
 
-    // Chart 2: SLA Bar / Donut
+    // 2. SLA Donut
     const slaCtx = document.getElementById("chartSla")?.getContext("2d");
     if (slaCtx) {
         if (charts.sla) charts.sla.destroy();
@@ -320,15 +526,13 @@ function renderChartsWithData(k) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } }
-                },
+                plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
                 cutout: "68%"
             }
         });
     }
 
-    // Chart 3: Prioridade
+    // 3. Prioridade Bar
     const prioCtx = document.getElementById("chartPrioridade")?.getContext("2d");
     if (prioCtx) {
         if (charts.prioridade) charts.prioridade.destroy();
@@ -357,7 +561,92 @@ function renderChartsWithData(k) {
         });
     }
 
-    // Chart 4: Categorias (Horizontal Bar)
+    // 4. Evolução Temporal (Timeline Line Chart)
+    const timelineCtx = document.getElementById("chartTimeline")?.getContext("2d");
+    if (timelineCtx && k.timeline) {
+        if (charts.timeline) charts.timeline.destroy();
+        charts.timeline = new Chart(timelineCtx, {
+            type: "line",
+            data: {
+                labels: k.timeline.labels.length ? k.timeline.labels : ["Sem dados"],
+                datasets: [
+                    {
+                        label: "Registradas",
+                        data: k.timeline.registradas.length ? k.timeline.registradas : [0],
+                        borderColor: "#3b82f6",
+                        backgroundColor: "rgba(59, 130, 246, 0.1)",
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4
+                    },
+                    {
+                        label: "Concluídas",
+                        data: k.timeline.concluidas.length ? k.timeline.concluidas : [0],
+                        borderColor: "#10b981",
+                        backgroundColor: "rgba(16, 185, 129, 0.1)",
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: "top", labels: { boxWidth: 12, font: { size: 11 } } } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // 5. Top Impacto Financeiro (Horizontal Bar)
+    const finCtx = document.getElementById("chartFinanceiro")?.getContext("2d");
+    if (finCtx) {
+        if (charts.financeiro) charts.financeiro.destroy();
+        const topItems = k.top_financeiro || [];
+        const labels = topItems.map(item => `#${item.id} - ${item.categoria} (${item.filial})`);
+        const values = topItems.map(item => item.valor);
+
+        charts.financeiro = new Chart(finCtx, {
+            type: "bar",
+            data: {
+                labels: labels.length ? labels : ["Sem dados de valor"],
+                datasets: [{
+                    label: "Valor Total (R$)",
+                    data: values.length ? values : [0],
+                    backgroundColor: "#10b981",
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `Valor: ${formatCurrency(context.raw)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (v) => formatCurrency(v)
+                        }
+                    },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // 6. Categorias
     const catCtx = document.getElementById("chartCategoria")?.getContext("2d");
     if (catCtx) {
         if (charts.categoria) charts.categoria.destroy();
@@ -387,7 +676,7 @@ function renderChartsWithData(k) {
         });
     }
 
-    // Chart 5: Setor Responsável
+    // 7. Setor Responsável
     const setorCtx = document.getElementById("chartSetor")?.getContext("2d");
     if (setorCtx) {
         if (charts.setor) charts.setor.destroy();
@@ -416,7 +705,7 @@ function renderChartsWithData(k) {
         });
     }
 
-    // Chart 6: Filiais
+    // 8. Filiais
     const filialCtx = document.getElementById("chartFilial")?.getContext("2d");
     if (filialCtx) {
         if (charts.filial) charts.filial.destroy();
@@ -446,6 +735,57 @@ function renderChartsWithData(k) {
     }
 }
 
+// Table Sorting & Pagination
+function sortTable(column) {
+    if (currentSortColumn === column) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = column;
+        currentSortDirection = 'asc';
+    }
+    updateSortIcons();
+    applyFilters();
+}
+
+function updateSortIcons() {
+    const columns = ['id', 'data_registro_iso', 'filial', 'setor_responsavel', 'prioridade', 'status', 'situacao_sla', 'total_anexos', 'valor_notas'];
+    columns.forEach(col => {
+        const icon = document.getElementById(`sort-icon-${col}`);
+        if (!icon) return;
+        if (col === currentSortColumn) {
+            icon.textContent = currentSortDirection === 'asc' ? '▲' : '▼';
+            icon.className = 'text-blue-600 font-bold';
+        } else {
+            icon.textContent = '↕';
+            icon.className = 'text-gray-300';
+        }
+    });
+}
+
+function changePageSize() {
+    const select = document.getElementById("pagination-size");
+    const val = select.value;
+    pageSize = val === "all" ? 999999 : parseInt(val, 10);
+    currentPage = 1;
+    renderTable();
+}
+
+function goToPage(page) {
+    currentPage = page;
+    renderTable();
+}
+
+function toggleOnlyAnexos() {
+    onlyWithAnexos = !onlyWithAnexos;
+    const btn = document.getElementById("btn-toggle-anexos");
+    if (onlyWithAnexos) {
+        btn?.classList.add("bg-blue-100", "text-blue-800", "border-blue-400");
+    } else {
+        btn?.classList.remove("bg-blue-100", "text-blue-800", "border-blue-400");
+    }
+    applyFilters();
+}
+
 // Filters & Table Rendering
 function applyFilters() {
     const search = (document.getElementById("filter-search")?.value || "").toLowerCase().trim();
@@ -459,6 +799,7 @@ function applyFilters() {
         if (prio && r.prioridade !== prio) return false;
         if (sla && r.situacao_sla !== sla) return false;
         if (filial && r.filial !== filial) return false;
+        if (onlyWithAnexos && (!r.total_anexos || r.total_anexos === 0)) return false;
 
         // Quick filter
         if (activeQuickFilter === "aberto" && (r.status === "Concluído" || r.status === "Cancelado")) return false;
@@ -467,11 +808,19 @@ function applyFilters() {
         if (activeQuickFilter === "critica" && r.prioridade !== "Crítica") return false;
         if (activeQuickFilter === "concluido" && r.status !== "Concluído") return false;
 
+        // Date range
+        const reg_iso = r.data_registro_iso;
+        if (reg_iso) {
+            if (activePeriodFilter.data_inicio && reg_iso < activePeriodFilter.data_inicio) return false;
+            if (activePeriodFilter.data_fim && reg_iso > activePeriodFilter.data_fim) return false;
+        }
+
         if (search) {
             const str = [
                 r.id, r.responsavel, r.setor_responsavel, r.setor_impactado,
                 r.filial, r.categoria_dor, r.descricao_problema, r.causa_raiz,
-                r.impacto_negocio, r.nota_fiscal, r.numero_chamado, r.responsavel_solucao
+                r.impacto_negocio, r.nota_fiscal, r.numero_chamado, r.responsavel_solucao,
+                r.anexos_nomes
             ].join(" ").toLowerCase();
             if (!str.includes(search)) return false;
         }
@@ -479,6 +828,26 @@ function applyFilters() {
         return true;
     });
 
+    // Sorting
+    filteredRecords.sort((a, b) => {
+        let valA = a[currentSortColumn];
+        let valB = b[currentSortColumn];
+
+        if (valA === null || valA === undefined) valA = "";
+        if (valB === null || valB === undefined) valB = "";
+
+        if (typeof valA === "number" && typeof valB === "number") {
+            return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+        }
+
+        valA = valA.toString().toLowerCase();
+        valB = valB.toString().toLowerCase();
+        if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    currentPage = 1;
     renderTable();
 }
 
@@ -511,6 +880,9 @@ function resetFilters() {
     document.getElementById("filter-prioridade").value = "";
     document.getElementById("filter-sla").value = "";
     document.getElementById("filter-filial").value = "";
+    onlyWithAnexos = false;
+    const btn = document.getElementById("btn-toggle-anexos");
+    btn?.classList.remove("bg-blue-100", "text-blue-800", "border-blue-400");
     activeQuickFilter = "";
     applyFilters();
 }
@@ -519,6 +891,7 @@ function renderTable() {
     const tbody = document.getElementById("records-table-body");
     const counter = document.getElementById("records-counter-text");
     const badgeCount = document.getElementById("badge-total-records");
+    const paginationControls = document.getElementById("pagination-controls");
 
     if (badgeCount) badgeCount.textContent = allRecords.length;
     if (counter) counter.textContent = `Exibindo ${filteredRecords.length} de ${allRecords.length} ocorrências`;
@@ -528,21 +901,29 @@ function renderTable() {
     if (filteredRecords.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="px-6 py-12 text-center text-gray-500">
+                <td colspan="11" class="px-6 py-12 text-center text-gray-500">
                     <i data-lucide="inbox" class="w-10 h-10 mx-auto text-gray-300 mb-2"></i>
                     <p class="font-medium text-sm text-gray-600">Nenhuma pendência encontrada com os filtros selecionados.</p>
                     <p class="text-xs text-gray-400 mt-1">Tente ajustar a busca ou limpe os filtros para ver todos os registros.</p>
                 </td>
             </tr>
         `;
+        if (paginationControls) paginationControls.innerHTML = "";
         lucide.createIcons();
         return;
     }
 
-    tbody.innerHTML = filteredRecords.map(r => {
+    // Pagination slice
+    const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    const startIdx = (currentPage - 1) * pageSize;
+    const pagedRecords = filteredRecords.slice(startIdx, startIdx + pageSize);
+
+    tbody.innerHTML = pagedRecords.map(r => {
         const statusBadge = getStatusBadge(r.status);
         const slaBadge = getSlaBadge(r);
         const prioBadge = getPriorityBadge(r.prioridade);
+        const hasAttachments = r.total_anexos && r.total_anexos > 0;
 
         return `
             <tr class="hover:bg-gray-50 transition border-b border-gray-100">
@@ -566,20 +947,62 @@ function renderTable() {
                 <td class="px-3.5 py-3 whitespace-nowrap">${prioBadge}</td>
                 <td class="px-3.5 py-3 whitespace-nowrap">${statusBadge}</td>
                 <td class="px-3.5 py-3 whitespace-nowrap">${slaBadge}</td>
+                <td class="px-3.5 py-3 text-center whitespace-nowrap">
+                    ${hasAttachments ? `
+                        <button onclick="openDetailsModal(${r.id})" class="badge-anexo cursor-pointer" title="${escapeHtml(r.anexos_nomes)}">
+                            <i data-lucide="paperclip" class="w-3 h-3"></i> ${r.total_anexos}
+                        </button>
+                    ` : `<span class="text-gray-300 text-xs">-</span>`}
+                </td>
                 <td class="px-3.5 py-3 text-right font-medium text-gray-800 whitespace-nowrap">${formatCurrency(r.valor_notas)}</td>
                 <td class="px-3.5 py-3 text-center whitespace-nowrap">
-                    <div class="flex items-center justify-center space-x-1.5">
-                        <button onclick="openDetailsModal(${r.id})" class="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition" title="Ver detalhes completos">
+                    <div class="flex items-center justify-center space-x-1">
+                        <button onclick="openDetailsModal(${r.id})" class="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition" title="Ver detalhes e anexos">
                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
-                        <button onclick="openEditModal(${r.id})" class="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition" title="Atualizar / Tratar">
+                        <button onclick="openEditModal(${r.id})" class="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition" title="Editar / Tratar">
                             <i data-lucide="edit-3" class="w-4 h-4"></i>
                         </button>
+                        ${r.status !== "Concluído" ? `
+                            <button onclick="quickCompleteDemand(${r.id})" class="p-1.5 text-green-600 hover:text-white hover:bg-green-600 rounded-lg transition" title="Concluir Ocorrência Imediatamente">
+                                <i data-lucide="check-check" class="w-4 h-4"></i>
+                            </button>
+                        ` : ''}
                     </div>
                 </td>
             </tr>
         `;
     }).join("");
+
+    // Render Pagination Controls
+    if (paginationControls) {
+        if (totalPages <= 1) {
+            paginationControls.innerHTML = "";
+        } else {
+            let html = `
+                <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled class="px-2 py-1 text-gray-300 cursor-not-allowed"' : 'class="px-2 py-1 text-gray-600 hover:bg-gray-200 rounded"'} title="Página Anterior">
+                    &laquo;
+                </button>
+            `;
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `
+                        <button onclick="goToPage(${i})" class="px-2.5 py-1 rounded text-xs font-semibold ${currentPage === i ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-200'}">
+                            ${i}
+                        </button>
+                    `;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<span class="px-1 text-gray-400">...</span>`;
+                }
+            }
+            html += `
+                <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled class="px-2 py-1 text-gray-300 cursor-not-allowed"' : 'class="px-2 py-1 text-gray-600 hover:bg-gray-200 rounded"'} title="Próxima Página">
+                    &raquo;
+                </button>
+            `;
+            paginationControls.innerHTML = html;
+        }
+    }
 
     lucide.createIcons();
 }
@@ -590,7 +1013,7 @@ function renderRecentDashboardTable() {
 
     const recent = allRecords.slice(-5).reverse();
     if (recent.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-gray-400">Nenhum registro encontrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-gray-400">Nenhum registro encontrado.</td></tr>`;
         return;
     }
 
@@ -604,6 +1027,9 @@ function renderRecentDashboardTable() {
             <td class="px-4 py-2.5">${getPriorityBadge(r.prioridade)}</td>
             <td class="px-4 py-2.5">${getStatusBadge(r.status)}</td>
             <td class="px-4 py-2.5">${getSlaBadge(r)}</td>
+            <td class="px-4 py-2.5 text-center">
+                ${r.total_anexos ? `<span class="badge-anexo"><i data-lucide="paperclip" class="w-3 h-3"></i> ${r.total_anexos}</span>` : '-'}
+            </td>
             <td class="px-4 py-2.5 text-right">
                 <button onclick="openDetailsModal(${r.id})" class="text-xs text-blue-600 hover:underline font-semibold">Detalhes</button>
             </td>
@@ -611,6 +1037,46 @@ function renderRecentDashboardTable() {
     `).join("");
 
     lucide.createIcons();
+}
+
+// Quick 1-Click Concluir
+async function quickCompleteDemand(id) {
+    if (!confirm(`Deseja marcar a demanda #${id} como Concluída agora? Isso atualizará a planilha Excel imediatamente.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/records/${id}/quick-complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ observacoes: "Concluído via ação rápida no painel" })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(`Demanda #${id} marcada como Concluída com sucesso no Excel!`, "success");
+            await refreshAllData();
+        } else {
+            showToast(json.message || "Erro ao concluir demanda.", "error");
+        }
+    } catch (e) {
+        showToast("Erro na requisição: " + e.message, "error");
+    }
+}
+
+// Export CSV
+function exportTableToCSV() {
+    let url = "/api/export-csv";
+    const params = new URLSearchParams();
+    const status = document.getElementById("filter-status")?.value;
+    const prio = document.getElementById("filter-prioridade")?.value;
+    const filial = document.getElementById("filter-filial")?.value;
+    if (status) params.append("status", status);
+    if (prio) params.append("prioridade", prio);
+    if (filial) params.append("filial", filial);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    showToast("Gerando arquivo CSV estruturado...", "info");
+    window.location.href = url;
 }
 
 // Badges Generator
@@ -656,6 +1122,7 @@ function getSlaBadge(r) {
 // Modals
 function openNewModal() {
     setDefaultFormDates();
+    clearSelectedFiles('modal');
     document.getElementById("modal-nova-pendencia")?.classList.remove("hidden");
     lucide.createIcons();
 }
@@ -673,6 +1140,8 @@ function openDetailsModal(id) {
     document.getElementById("detalhe-subtitle").textContent = `Registrado por ${r.responsavel || '-'} em ${r.data_registro_br || '-'}`;
 
     const content = document.getElementById("detalhes-content");
+    const attachments = r.anexos || [];
+
     content.innerHTML = `
         <!-- Top Status Bar in Details -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
@@ -765,6 +1234,67 @@ function openDetailsModal(id) {
             </div>
         </div>
 
+        <!-- Attached Files & Evidences Section (NOVO) -->
+        <div class="border border-blue-100 bg-blue-50/30 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-blue-900 flex items-center gap-1.5 uppercase">
+                    <i data-lucide="paperclip" class="w-4 h-4 text-blue-600"></i> Evidências & Arquivos Anexados (${attachments.length})
+                </span>
+                <div class="no-print">
+                    <label class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-2xs transition flex items-center gap-1">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Anexar Arquivo
+                        <input type="file" multiple class="hidden" onchange="uploadDirectAttachment(event, ${r.id})">
+                    </label>
+                </div>
+            </div>
+
+            ${attachments.length === 0 ? `
+                <div class="p-4 text-center text-gray-400 text-xs bg-white rounded-xl border border-gray-100">
+                    Nenhum arquivo anexado a esta pendência. Utilize o botão acima para anexar evidências, notas ou fotos.
+                </div>
+            ` : `
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    ${attachments.map(a => {
+                        let iconName = "file";
+                        let iconColor = "text-gray-500";
+                        if (a.is_pdf) { iconName = "file-text"; iconColor = "text-red-500"; }
+                        else if (a.is_image) { iconName = "image"; iconColor = "text-purple-500"; }
+                        else if (a.is_excel) { iconName = "sheet"; iconColor = "text-green-500"; }
+                        else if (a.is_word) { iconName = "file-text"; iconColor = "text-blue-500"; }
+
+                        return `
+                            <div class="attachment-card p-2.5 bg-white rounded-xl shadow-2xs flex flex-col justify-between">
+                                <div class="flex items-start space-x-2">
+                                    ${a.is_image ? `
+                                        <img src="${a.url}" alt="${escapeHtml(a.filename)}" class="w-10 h-10 object-cover rounded-lg border border-gray-200 cursor-pointer" onclick="window.open('${a.url}', '_blank')">
+                                    ` : `
+                                        <div class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center border border-gray-100">
+                                            <i data-lucide="${iconName}" class="w-5 h-5 ${iconColor}"></i>
+                                        </div>
+                                    `}
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-semibold text-gray-800 truncate text-[11px]" title="${escapeHtml(a.filename)}">${escapeHtml(a.filename)}</p>
+                                        <p class="text-[10px] text-gray-400">${a.size_formatted} • ${a.uploaded_at}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-end space-x-1.5 pt-2 mt-2 border-t border-gray-100 no-print">
+                                    <button onclick="window.open('${a.url}', '_blank')" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] font-semibold transition" title="Visualizar">
+                                        Visualizar
+                                    </button>
+                                    <a href="${a.url}?download=1" class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-semibold transition" title="Baixar">
+                                        Baixar
+                                    </a>
+                                    <button onclick="deleteAttachmentDirect(${r.id}, '${escapeHtml(a.filename)}')" class="p-1 text-gray-300 hover:text-red-500 transition" title="Excluir">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join("")}
+                </div>
+            `}
+        </div>
+
         <!-- Notes -->
         ${r.observacoes ? `
             <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
@@ -843,7 +1373,58 @@ function toggleConclusionDate() {
     }
 }
 
-// Form Submission (Add Record)
+// Upload direct from details modal
+async function uploadDirectAttachment(event, recordId) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append("anexos", files[i]);
+    }
+
+    showToast("Enviando arquivo(s)...", "info");
+
+    try {
+        const res = await fetch(`/api/records/${recordId}/attachments`, {
+            method: "POST",
+            body: formData
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast("Arquivo(s) anexado(s) com sucesso!", "success");
+            await loadRecords();
+            openDetailsModal(recordId);
+        } else {
+            showToast(json.message || "Erro ao enviar anexo.", "error");
+        }
+    } catch (e) {
+        showToast("Erro na requisição: " + e.message, "error");
+    }
+}
+
+// Delete attachment direct
+async function deleteAttachmentDirect(recordId, filename) {
+    if (!confirm(`Deseja realmente excluir o arquivo "${filename}"?`)) return;
+
+    try {
+        const res = await fetch(`/api/records/${recordId}/attachments/${encodeURIComponent(filename)}`, {
+            method: "DELETE"
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast("Anexo excluído com sucesso!", "success");
+            await loadRecords();
+            openDetailsModal(recordId);
+        } else {
+            showToast(json.message || "Erro ao excluir arquivo.", "error");
+        }
+    } catch (e) {
+        showToast("Erro na requisição: " + e.message, "error");
+    }
+}
+
+// Form Submission (Add Record with Attachments via FormData)
 async function handleFormSubmit(e, source) {
     e.preventDefault();
     const form = e.target;
@@ -851,28 +1432,34 @@ async function handleFormSubmit(e, source) {
     const originalText = submitBtn ? submitBtn.innerHTML : "";
 
     const formData = new FormData(form);
-    const payload = {};
-    formData.forEach((value, key) => {
-        payload[key] = value.trim();
-    });
+
+    // Append selected files from our array
+    const prefix = source === 'modal' ? 'modal' : 'cad';
+    if (selectedFiles[prefix] && selectedFiles[prefix].length > 0) {
+        // Remove empty file input from native formData
+        formData.delete("anexos");
+        selectedFiles[prefix].forEach(file => {
+            formData.append("anexos", file);
+        });
+    }
 
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Gravando no Excel...`;
+        submitBtn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Gravando e anexando no Excel...`;
         lucide.createIcons();
     }
 
     try {
         const res = await fetch("/api/records", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: formData // Sends as multipart/form-data
         });
 
         const json = await res.json();
         if (json.success) {
             showToast(json.message || "Pendência cadastrada com sucesso no Excel!", "success");
             form.reset();
+            clearSelectedFiles(prefix);
             setDefaultFormDates();
             if (source === "modal") {
                 closeNewModal();

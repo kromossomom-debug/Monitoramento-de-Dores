@@ -15,12 +15,12 @@
 <body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
 
     <!-- Top Navigation Header -->
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm no-print">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <!-- Logo & Brand -->
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md">
                         <i data-lucide="activity" class="w-6 h-6"></i>
                     </div>
                     <div>
@@ -92,7 +92,7 @@
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         <!-- Executive KPI Metrics Grid -->
-        <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+        <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 no-print">
             <!-- Total Ocorrências -->
             <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
                 <div class="flex items-center justify-between text-gray-500 mb-1">
@@ -166,14 +166,14 @@
                 <div class="text-xs text-gray-500 mt-0.5">Dias sem solução</div>
             </div>
 
-            <!-- Tempo Médio Resolução -->
-            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs">
-                <div class="flex items-center justify-between text-gray-500 mb-1">
-                    <span class="text-xs font-medium uppercase tracking-wider">Méd. Resolução</span>
-                    <i data-lucide="check-check" class="w-4 h-4 text-teal-500"></i>
+            <!-- Total Anexos / Evidências -->
+            <div class="kpi-card bg-white p-3.5 rounded-xl shadow-xs border-l-4 border-l-blue-400">
+                <div class="flex items-center justify-between text-blue-600 mb-1">
+                    <span class="text-xs font-medium uppercase tracking-wider">Evidências</span>
+                    <i data-lucide="paperclip" class="w-4 h-4 text-blue-500"></i>
                 </div>
-                <div class="text-2xl font-bold text-gray-900" id="kpi-tempo-resolucao">0 d</div>
-                <div class="text-xs text-gray-500 mt-0.5">Dias até conclusão</div>
+                <div class="text-2xl font-bold text-blue-700" id="kpi-total-anexos">0</div>
+                <div class="text-xs text-gray-500 mt-0.5">Arquivos anexados</div>
             </div>
         </section>
 
@@ -181,6 +181,33 @@
         <!-- TAB 1: DASHBOARD EXECUTIVO                  -->
         <!-- ========================================== -->
         <div id="tab-content-dashboard" class="space-y-6">
+
+            <!-- Global Date Period Filter Bar -->
+            <div class="bg-white p-3.5 rounded-2xl shadow-xs border border-gray-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="calendar-range" class="w-4 h-4 text-blue-600"></i>
+                    <span class="font-bold text-gray-700">Período de Análise:</span>
+                    <select id="dash-period-select" onchange="handlePeriodChange()" class="border border-gray-300 rounded-lg px-2.5 py-1.5 font-medium text-gray-800 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="all">Todo o Histórico</option>
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="30d">Últimos 30 dias</option>
+                        <option value="month">Este Mês</option>
+                        <option value="custom">Personalizado...</option>
+                    </select>
+                </div>
+
+                <div id="dash-custom-dates" class="hidden flex items-center space-x-2">
+                    <span>De:</span>
+                    <input type="date" id="dash-date-start" class="border border-gray-300 rounded-lg px-2 py-1 text-xs">
+                    <span>Até:</span>
+                    <input type="date" id="dash-date-end" class="border border-gray-300 rounded-lg px-2 py-1 text-xs">
+                    <button onclick="applyCustomDateFilter()" class="px-2.5 py-1 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">Aplicar</button>
+                </div>
+
+                <div class="flex items-center space-x-2 text-gray-500">
+                    <span id="dash-period-label" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-semibold">Exibindo todo o histórico</span>
+                </div>
+            </div>
 
             <!-- Urgent Attention Banner (If SLA Vencido > 0) -->
             <div id="urgent-banner" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-xl shadow-xs flex items-center justify-between">
@@ -198,8 +225,8 @@
                 </button>
             </div>
 
-            <!-- Charts Row 1: Status & SLA -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Charts Row 1: Status, SLA & Prioridade -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Chart 1: Status das Ocorrências -->
                 <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
                     <div class="flex items-center justify-between mb-4">
@@ -243,9 +270,40 @@
                 </div>
             </div>
 
-            <!-- Charts Row 2: Categorias, Setores & Filiais -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Chart 4: Dores por Categoria -->
+            <!-- Charts Row 2: Evolução Temporal & Top Impacto Financeiro -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Chart 4: Evolução Temporal -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Evolução Temporal das Dores</h3>
+                            <p class="text-xs text-gray-500">Ocorrências registradas vs concluídas por mês</p>
+                        </div>
+                        <i data-lucide="trending-up" class="w-4 h-4 text-indigo-500"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px]">
+                        <canvas id="chartTimeline"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 5: Top Impactos Financeiros (Pareto) -->
+                <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Top 5 Maiores Impactos Financeiros (R$)</h3>
+                            <p class="text-xs text-gray-500">Dores com maior valor fiscal ou prejuízo envolvido</p>
+                        </div>
+                        <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <div class="relative flex-1 min-h-[220px]">
+                        <canvas id="chartFinanceiro"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 3: Categorias, Setores & Filiais -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Chart 6: Dores por Categoria -->
                 <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
                     <div class="flex items-center justify-between mb-4">
                         <div>
@@ -254,12 +312,12 @@
                         </div>
                         <i data-lucide="tag" class="w-4 h-4 text-gray-400"></i>
                     </div>
-                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                    <div class="relative flex-1 min-h-[200px] flex items-center justify-center">
                         <canvas id="chartCategoria"></canvas>
                     </div>
                 </div>
 
-                <!-- Chart 5: Setores Responsáveis -->
+                <!-- Chart 7: Setores Responsáveis -->
                 <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
                     <div class="flex items-center justify-between mb-4">
                         <div>
@@ -268,12 +326,12 @@
                         </div>
                         <i data-lucide="briefcase" class="w-4 h-4 text-gray-400"></i>
                     </div>
-                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                    <div class="relative flex-1 min-h-[200px] flex items-center justify-center">
                         <canvas id="chartSetor"></canvas>
                     </div>
                 </div>
 
-                <!-- Chart 6: Ocorrências por Filial -->
+                <!-- Chart 8: Ocorrências por Filial -->
                 <div class="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col">
                     <div class="flex items-center justify-between mb-4">
                         <div>
@@ -282,7 +340,7 @@
                         </div>
                         <i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i>
                     </div>
-                    <div class="relative flex-1 min-h-[220px] flex items-center justify-center">
+                    <div class="relative flex-1 min-h-[200px] flex items-center justify-center">
                         <canvas id="chartFilial"></canvas>
                     </div>
                 </div>
@@ -311,6 +369,7 @@
                                 <th class="px-4 py-3">Prioridade</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Situação SLA</th>
+                                <th class="px-4 py-3 text-center">Anexos</th>
                                 <th class="px-4 py-3 text-right">Ação</th>
                             </tr>
                         </thead>
@@ -326,29 +385,26 @@
         <!-- TAB 2: CONSULTA & GESTÃO                   -->
         <!-- ========================================== -->
         <div id="tab-content-consulta" class="hidden space-y-4">
-            
+
             <!-- Filter & Search Bar -->
             <div class="bg-white p-4 rounded-2xl shadow-xs border border-gray-200 space-y-3">
                 <div class="flex flex-col md:flex-row gap-3 items-center justify-between">
                     <!-- Search Input -->
                     <div class="relative w-full md:w-96">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
-                        <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Buscar por ID, descrição, responsável, NF..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Buscar por ID, descrição, responsável, NF, anexos..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     </div>
 
-                    <!-- Filter Dropdowns -->
+                    <!-- Filter Dropdowns & Export Buttons -->
                     <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                        <!-- Status Filter -->
                         <select id="filter-status" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="">Status: Todos</option>
                         </select>
 
-                        <!-- Prioridade Filter -->
                         <select id="filter-prioridade" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="">Prioridade: Todas</option>
                         </select>
 
-                        <!-- Situação SLA Filter -->
                         <select id="filter-sla" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="">SLA: Todos</option>
                             <option value="No prazo">No prazo</option>
@@ -357,12 +413,20 @@
                             <option value="Concluído">Concluído</option>
                         </select>
 
-                        <!-- Filial Filter -->
                         <select id="filter-filial" onchange="applyFilters()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="">Filial: Todas</option>
                         </select>
 
-                        <!-- Reset Button -->
+                        <!-- Only With Attachments toggle -->
+                        <button id="btn-toggle-anexos" onclick="toggleOnlyAnexos()" class="px-3 py-2 border border-gray-300 rounded-xl text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 flex items-center gap-1 transition" title="Filtrar ocorrências que possuem anexos">
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5 text-blue-600"></i> Com Anexos
+                        </button>
+
+                        <!-- Export CSV Button -->
+                        <button onclick="exportTableToCSV()" class="px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 flex items-center gap-1.5 transition shadow-xs" title="Exportar dados filtrados para CSV / Excel">
+                            <i data-lucide="file-down" class="w-3.5 h-3.5 text-emerald-600"></i> Exportar CSV
+                        </button>
+
                         <button onclick="resetFilters()" class="p-2 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-100 transition" title="Limpar Filtros">
                             <i data-lucide="x" class="w-4 h-4"></i>
                         </button>
@@ -387,15 +451,34 @@
                     <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
                         <thead class="bg-gray-50 text-gray-600 font-semibold uppercase tracking-wider">
                             <tr>
-                                <th class="px-3.5 py-3 text-center">ID</th>
-                                <th class="px-3.5 py-3">Datas</th>
-                                <th class="px-3.5 py-3">Filial / Categoria</th>
-                                <th class="px-3.5 py-3">Setor Responsável</th>
+                                <th class="px-3.5 py-3 text-center sortable" onclick="sortTable('id')">
+                                    ID <span id="sort-icon-id">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('data_registro_iso')">
+                                    Datas <span id="sort-icon-data_registro_iso">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('filial')">
+                                    Filial / Categoria <span id="sort-icon-filial">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('setor_responsavel')">
+                                    Setor Responsável <span id="sort-icon-setor_responsavel">↕</span>
+                                </th>
                                 <th class="px-3.5 py-3">Descrição / NF</th>
-                                <th class="px-3.5 py-3">Prioridade</th>
-                                <th class="px-3.5 py-3">Status</th>
-                                <th class="px-3.5 py-3">Situação SLA</th>
-                                <th class="px-3.5 py-3 text-right">Valor (R$)</th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('prioridade')">
+                                    Prioridade <span id="sort-icon-prioridade">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('status')">
+                                    Status <span id="sort-icon-status">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 sortable" onclick="sortTable('situacao_sla')">
+                                    Situação SLA <span id="sort-icon-situacao_sla">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 text-center sortable" onclick="sortTable('total_anexos')">
+                                    Anexos <span id="sort-icon-total_anexos">↕</span>
+                                </th>
+                                <th class="px-3.5 py-3 text-right sortable" onclick="sortTable('valor_notas')">
+                                    Valor (R$) <span id="sort-icon-valor_notas">↕</span>
+                                </th>
                                 <th class="px-3.5 py-3 text-center">Ações</th>
                             </tr>
                         </thead>
@@ -405,10 +488,24 @@
                     </table>
                 </div>
 
-                <!-- Table Footer / Count -->
-                <div class="p-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
-                    <span id="records-counter-text">Exibindo 0 ocorrências</span>
-                    <span>Sincronizado diretamente com a planilha Excel</span>
+                <!-- Table Footer & Pagination -->
+                <div class="p-3.5 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between text-xs text-gray-600 gap-3">
+                    <div class="flex items-center space-x-2">
+                        <span id="records-counter-text">Exibindo 0 ocorrências</span>
+                        <span class="text-gray-300">|</span>
+                        <span>Itens por página:</span>
+                        <select id="pagination-size" onchange="changePageSize()" class="border border-gray-300 rounded-lg px-2 py-1 bg-white font-medium">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="all">Todos</option>
+                        </select>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div class="flex items-center space-x-1" id="pagination-controls">
+                        <!-- Populated via JS -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -418,11 +515,11 @@
         <!-- ========================================== -->
         <div id="tab-content-cadastro" class="hidden">
             <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xs border border-gray-200 p-6 md:p-8">
-                
+
                 <div class="flex items-center justify-between pb-5 mb-6 border-b border-gray-200">
                     <div>
                         <h2 class="text-xl font-bold text-gray-900">Cadastrar Nova Pendência / Dor</h2>
-                        <p class="text-xs text-gray-500 mt-1">Os dados serão inseridos diretamente na planilha Excel mantendo todas as fórmulas de cálculo.</p>
+                        <p class="text-xs text-gray-500 mt-1">Os dados serão inseridos diretamente na planilha Excel mantendo todas as fórmulas e anexando os arquivos.</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
@@ -432,7 +529,7 @@
                 </div>
 
                 <form id="form-cadastro-pendencia" onsubmit="handleFormSubmit(event, 'cadastro')">
-                    
+
                     <!-- Section 1: Dados Gerais da Ocorrência -->
                     <div class="mb-8">
                         <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -457,27 +554,19 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Filial *</label>
-                                <select name="filial" id="cad_filial" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <!-- Populated from Parâmetros -->
-                                </select>
+                                <select name="filial" id="cad_filial" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Setor Responsável *</label>
-                                <select name="setor_responsavel" id="cad_setor_responsavel" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <!-- Populated from Parâmetros -->
-                                </select>
+                                <select name="setor_responsavel" id="cad_setor_responsavel" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Setor Impactado</label>
-                                <select name="setor_impactado" id="cad_setor_impactado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <!-- Populated from Parâmetros -->
-                                </select>
+                                <select name="setor_impactado" id="cad_setor_impactado" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Categoria da Dor *</label>
-                                <select name="categoria_dor" id="cad_categoria_dor" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <!-- Populated from Parâmetros -->
-                                </select>
+                                <select name="categoria_dor" id="cad_categoria_dor" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></select>
                             </div>
                         </div>
                     </div>
@@ -508,9 +597,7 @@
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-blue-50 p-4 rounded-xl border border-blue-100">
                                 <div>
                                     <label class="block text-xs font-semibold text-blue-900 mb-1">Prioridade / Criticidade *</label>
-                                    <select name="prioridade" id="cad_prioridade" onchange="updateSlaBadgePreview('cad')" required class="w-full border border-blue-300 rounded-xl px-3 py-2 text-sm bg-white font-medium focus:ring-2 focus:ring-blue-500 outline-none">
-                                        <!-- Populated via JS -->
-                                    </select>
+                                    <select name="prioridade" id="cad_prioridade" onchange="updateSlaBadgePreview('cad')" required class="w-full border border-blue-300 rounded-xl px-3 py-2 text-sm bg-white font-medium focus:ring-2 focus:ring-blue-500 outline-none"></select>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-blue-900 mb-1">SLA Automático</label>
@@ -560,18 +647,38 @@
                         </div>
                     </div>
 
-                    <!-- Section 4: Plano de Ação & Solução -->
+                    <!-- Section 4: Anexo de Arquivos & Evidências (NOVO) -->
                     <div class="mb-8">
                         <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                             <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">4</span>
+                            Anexar Evidências & Arquivos (PDF, Imagens, NF, Documentos)
+                        </h3>
+                        
+                        <div class="dropzone p-6 text-center border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-blue-50/50 hover:border-blue-400 transition" id="cad-dropzone" onclick="triggerFileInput('cad_anexos_input')">
+                            <input type="file" id="cad_anexos_input" name="anexos" multiple class="hidden" onchange="handleFileSelect(event, 'cad')">
+                            <div class="flex flex-col items-center justify-center">
+                                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-2 shadow-xs">
+                                    <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                                </div>
+                                <p class="text-sm font-semibold text-gray-800">Clique para selecionar ou arraste os arquivos aqui</p>
+                                <p class="text-xs text-gray-500 mt-1">Suporta: PDF, PNG, JPG, XLSX, CSV, XML, DOCX, ZIP (até 50MB)</p>
+                            </div>
+                        </div>
+
+                        <!-- Preview list of selected files -->
+                        <div id="cad-file-preview-list" class="mt-3 flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <!-- Section 5: Plano de Ação & Solução -->
+                    <div class="mb-8">
+                        <h3 class="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">5</span>
                             Plano de Ação & Tratativa
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Status Inicial *</label>
-                                <select name="status" id="cad_status" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
-                                    <!-- Populated via JS -->
-                                </select>
+                                <select name="status" id="cad_status" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold"></select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Prazo Acordado</label>
@@ -597,12 +704,12 @@
 
                     <!-- Actions -->
                     <div class="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-                        <button type="reset" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                        <button type="reset" onclick="clearSelectedFiles('cad')" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
                             Limpar Formulário
                         </button>
                         <button type="submit" id="btn-submit-cad" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md transition flex items-center gap-2">
                             <i data-lucide="check" class="w-4 h-4"></i>
-                            Gravar Pendência no Excel
+                            Gravar Pendência & Anexos no Excel
                         </button>
                     </div>
                 </form>
@@ -621,8 +728,8 @@
                             <i data-lucide="file-spreadsheet" class="w-8 h-8"></i>
                         </div>
                         <div>
-                            <h2 class="text-lg font-bold text-gray-900">Base de Dados: Planilha Excel</h2>
-                            <p class="text-xs text-gray-500">O sistema lê e grava diretamente no arquivo Excel especificado.</p>
+                            <h2 class="text-lg font-bold text-gray-900">Base de Dados: Planilha Excel & Repositório de Anexos</h2>
+                            <p class="text-xs text-gray-500">O sistema lê e grava diretamente no arquivo Excel e organiza evidências na pasta uploads/.</p>
                         </div>
                     </div>
 
@@ -646,10 +753,8 @@
                                 <span class="text-lg font-bold text-blue-600" id="status-backupcount">0</span>
                             </div>
                             <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                <span class="text-gray-500 font-semibold block uppercase">Integridade</span>
-                                <span class="text-xs font-bold text-green-600 flex items-center gap-1">
-                                    <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Preservando Fórmulas
-                                </span>
+                                <span class="text-gray-500 font-semibold block uppercase">Arquivos Anexados</span>
+                                <span class="text-lg font-bold text-emerald-600" id="status-attachmentcount">0</span>
                             </div>
                         </div>
                     </div>
@@ -661,6 +766,9 @@
                         <a href="/api/download-excel" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2">
                             <i data-lucide="download" class="w-4 h-4"></i> Baixar Arquivo Excel
                         </a>
+                        <button onclick="exportTableToCSV()" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2">
+                            <i data-lucide="file-text" class="w-4 h-4"></i> Exportar Dados para CSV
+                        </button>
                     </div>
                 </div>
 
@@ -668,19 +776,15 @@
                 <div class="bg-white rounded-2xl shadow-xs border border-gray-200 p-6">
                     <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                         <i data-lucide="cpu" class="w-4 h-4 text-blue-600"></i>
-                        Arquitetura & Fórmulas Preservadas
+                        Estrutura de Colunas & Anexos
                     </h3>
                     <div class="space-y-3 text-xs text-gray-600">
                         <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                            <strong class="text-gray-800">Aba 1 (Indicadores):</strong> Painel de fórmulas de contagem (COUNT, COUNTIFS, AVERAGEIFS) recalculadas nativamente pelo Excel a cada salvamento.
+                            <strong class="text-gray-800">Aba 1 (Indicadores):</strong> Painel com fórmulas de contagem (COUNT, COUNTIFS, AVERAGEIFS) recalculadas nativamente pelo Excel a cada salvamento.
                         </div>
                         <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                            <strong class="text-gray-800">Aba 2 (Monitoramento de Dores):</strong> Contém todas as 30 colunas de dados. Cada inserção grava as fórmulas:
-                            <code class="block mt-1 font-mono text-gray-700">Col A: =IF(C{r}="","",ROW()-1)</code>
-                            <code class="block font-mono text-gray-700">Col U: =IF(C{r}="","",IF(T{r}="",TODAY()-C{r},T{r}-C{r}))</code>
-                            <code class="block font-mono text-gray-700">Col X: =IF(P{r}="","",IFERROR(VLOOKUP(P{r},Parâmetros!$J$2:$K$5,2,FALSE),""))</code>
-                            <code class="block font-mono text-gray-700">Col Y: =IF(OR(C{r}="",X{r}=""),"",C{r}+X{r})</code>
-                            <code class="block font-mono text-gray-700">Col Z: =IF(C{r}="","",IF(Q{r}="Concluído","Concluído",IF(Y{r}&lt;TODAY(),"Vencido",...)))</code>
+                            <strong class="text-gray-800">Aba 2 (Monitoramento de Dores):</strong> Contém as 30 colunas de dados originais + Coluna 31 (AE - Anexos).
+                            As evidências enviadas são salvas na pasta local <code class="bg-gray-200 px-1 py-0.5 rounded">uploads/{id}/</code> e seus nomes são registrados na coluna 31 do Excel.
                         </div>
                         <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
                             <strong class="text-gray-800">Aba 3 (Parâmetros):</strong> Referência central de SLAs e listas suspensas (Status, Prioridade, Filial, Setores).
@@ -693,14 +797,14 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-400">
-        <p>Sistema de Mapeamento de Dores | Painel Local Integrado com Microsoft Excel</p>
+    <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-400 no-print">
+        <p>Sistema de Mapeamento de Dores | Painel Local Integrado com Microsoft Excel e Gestão de Anexos</p>
     </footer>
 
     <!-- ======================================================== -->
     <!-- MODAL 1: CADASTRAR NOVA PENDÊNCIA (MODAL RÁPIDO)        -->
     <!-- ======================================================== -->
-    <div id="modal-nova-pendencia" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
+    <div id="modal-nova-pendencia" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop no-print">
         <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
             <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
@@ -710,7 +814,7 @@
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-gray-900">Cadastrar Nova Pendência</h3>
-                        <p class="text-xs text-gray-500">Gera um novo registro na planilha Excel</p>
+                        <p class="text-xs text-gray-500">Gera um novo registro na planilha Excel com anexos</p>
                     </div>
                 </div>
                 <button onclick="closeNewModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
@@ -810,6 +914,19 @@
                         </div>
                     </div>
 
+                    <!-- Upload de Anexos no Modal -->
+                    <div class="mt-3">
+                        <label class="block text-xs font-bold text-gray-800 mb-1">Anexar Arquivos / Evidências</label>
+                        <div class="dropzone p-3 text-center border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 hover:bg-blue-50/50 hover:border-blue-400 transition" id="modal-dropzone" onclick="triggerFileInput('modal_anexos_input')">
+                            <input type="file" id="modal_anexos_input" name="anexos" multiple class="hidden" onchange="handleFileSelect(event, 'modal')">
+                            <div class="flex items-center justify-center space-x-2 text-xs text-gray-600">
+                                <i data-lucide="upload-cloud" class="w-4 h-4 text-blue-500"></i>
+                                <span>Arraste arquivos ou clique para anexar (PDF, imagens, NF...)</span>
+                            </div>
+                        </div>
+                        <div id="modal-file-preview-list" class="mt-2 flex flex-wrap gap-2"></div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
                         <div>
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Status Inicial *</label>
@@ -820,7 +937,7 @@
                             <input type="date" name="prazo" id="modal_prazo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável pela Solução</label>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Responsável Solução</label>
                             <input type="text" name="responsavel_solucao" id="modal_responsavel_solucao" placeholder="Ex: Faturamento" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                     </div>
@@ -836,7 +953,7 @@
                             Cancelar
                         </button>
                         <button type="submit" id="btn-submit-modal" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
-                            <i data-lucide="check" class="w-4 h-4"></i> Salvar na Planilha
+                            <i data-lucide="check" class="w-4 h-4"></i> Salvar com Anexos no Excel
                         </button>
                     </div>
                 </form>
@@ -845,21 +962,24 @@
     </div>
 
     <!-- ======================================================== -->
-    <!-- MODAL 2: DETALHES COMPLETOS DA PENDÊNCIA                -->
+    <!-- MODAL 2: DETALHES COMPLETOS DA PENDÊNCIA (COM ANEXOS)   -->
     <!-- ======================================================== -->
     <div id="modal-detalhes" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in modal-content">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 no-print">
                 <div class="flex items-center space-x-2">
                     <div class="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
                         <i data-lucide="file-text" class="w-5 h-5"></i>
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-gray-900" id="detalhe-title">Pendência #1</h3>
-                        <p class="text-xs text-gray-500" id="detalhe-subtitle">Visualização de todos os 30 campos da base</p>
+                        <p class="text-xs text-gray-500" id="detalhe-subtitle">Visualização de todos os campos e anexos</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
+                    <button onclick="window.print()" class="px-3 py-1.5 border border-gray-300 hover:bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 transition flex items-center gap-1">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Ficha
+                    </button>
                     <button onclick="openEditModalFromDetail()" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-semibold transition flex items-center gap-1">
                         <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Editar / Tratar
                     </button>
@@ -878,7 +998,7 @@
     <!-- ======================================================== -->
     <!-- MODAL 3: ATUALIZAR / TRATAR STATUS (EDIT)               -->
     <!-- ======================================================== -->
-    <div id="modal-editar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop">
+    <div id="modal-editar" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop no-print">
         <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in">
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                 <div class="flex items-center space-x-2">
@@ -902,15 +1022,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Status da Ocorrência *</label>
-                            <select id="edit_status" name="status" onchange="toggleConclusionDate()" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none">
-                                <!-- Populated dynamically -->
-                            </select>
+                            <select id="edit_status" name="status" onchange="toggleConclusionDate()" required class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none"></select>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Prioridade</label>
-                            <select id="edit_prioridade" name="prioridade" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
-                                <!-- Populated dynamically -->
-                            </select>
+                            <select id="edit_prioridade" name="prioridade" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"></select>
                         </div>
                     </div>
 
@@ -961,7 +1077,7 @@
     </div>
 
     <!-- Toast Container -->
-    <div id="toast-container"></div>
+    <div id="toast-container" class="no-print"></div>
 
     <!-- Application Script -->
     <script src="/static/js/app.js"></script>
