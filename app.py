@@ -9,7 +9,8 @@ import csv
 # ==============================================================================
 REQUIRED_PACKAGES = [
     ("flask", "Flask>=3.0.0"),
-    ("openpyxl", "openpyxl>=3.1.2")
+    ("openpyxl", "openpyxl>=3.1.2"),
+    ("reportlab", "reportlab>=4.0.0")
 ]
 
 def ensure_dependencies_installed():
@@ -56,6 +57,7 @@ import webbrowser
 import threading
 from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, Response
 import excel_manager
+import pdf_generator
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False  # Suporte total a UTF-8
@@ -407,6 +409,53 @@ def export_csv():
             csv_data,
             mimetype="text/csv",
             headers={"Content-disposition": "attachment; filename=relatorio_dores_filtrado.csv"}
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/relatorio-pdf", methods=["GET"])
+def gerar_relatorio_pdf():
+    """Generates an executive diagnostic PDF report filtered by date range and criteria."""
+    try:
+        records = excel_manager.get_all_records()
+
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+        status_filter = request.args.get("status")
+        filial_filter = request.args.get("filial")
+        periodo_label = request.args.get("periodo_label")
+        as_view = request.args.get("view") == "1"
+
+        filtered = []
+        for r in records:
+            if status_filter and r.get("status") != status_filter:
+                continue
+            if filial_filter and r.get("filial") != filial_filter:
+                continue
+
+            reg_iso = r.get("data_registro_iso")
+            if reg_iso:
+                if data_inicio and reg_iso < data_inicio:
+                    continue
+                if data_fim and reg_iso > data_fim:
+                    continue
+            filtered.append(r)
+
+        pdf_bytes = pdf_generator.build_pdf_report(
+            records=filtered,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            periodo_label=periodo_label
+        )
+
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        download_name = f"Relatorio_Executivo_Dores_{ts}.pdf"
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=(not as_view),
+            download_name=download_name
         )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

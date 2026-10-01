@@ -54,6 +54,11 @@
                         Baixar Excel
                     </a>
 
+                    <button onclick="openPdfModal()" class="inline-flex items-center px-3 py-2 border border-red-200 rounded-lg text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 hover:border-red-300 transition shadow-xs" title="Gerar relatório executivo em PDF com diagnósticos e insights">
+                        <i data-lucide="file-pie-chart" class="w-4 h-4 mr-1.5 text-red-600"></i>
+                        Relatório PDF
+                    </button>
+
                     <button onclick="openNewModal()" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm">
                         <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
                         Nova Pendência
@@ -206,6 +211,9 @@
 
                 <div class="flex items-center space-x-2 text-gray-500">
                     <span id="dash-period-label" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-semibold">Exibindo todo o histórico</span>
+                    <button onclick="generatePdfForCurrentPeriod()" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition flex items-center gap-1.5 shadow-2xs" title="Exportar relatório executivo oficial em PDF deste período">
+                        <i data-lucide="file-pie-chart" class="w-3.5 h-3.5"></i> Exportar PDF do Período
+                    </button>
                 </div>
             </div>
 
@@ -1105,6 +1113,112 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL 4: GERAR RELATÓRIO EXECUTIVO EM PDF COM INSIGHTS   -->
+    <!-- ======================================================== -->
+    <div id="modal-relatorio-pdf" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-backdrop no-print">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full flex flex-col overflow-hidden animate-in fade-in">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <div class="flex items-center space-x-2.5">
+                    <div class="p-2 bg-red-100 text-red-600 rounded-xl">
+                        <i data-lucide="file-pie-chart" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900">Gerar Relatório Executivo em PDF</h3>
+                        <p class="text-xs text-gray-500">Diagnóstico estratégico, causas, tratativas, impactos contábeis e estoque</p>
+                    </div>
+                </div>
+                <button onclick="closePdfModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4 text-xs">
+                <!-- Period Selector -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-800 mb-1.5">Período de Análise *</label>
+                    <select id="pdf-period-select" onchange="handlePdfModalPeriodChange()" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                        <option value="all">Todo o Histórico</option>
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="30d">Últimos 30 dias</option>
+                        <option value="month">Este Mês</option>
+                        <option value="last_month">Mês Anterior</option>
+                        <option value="custom">Personalizado (Escolher Datas)...</option>
+                    </select>
+                </div>
+
+                <!-- Custom Date Inputs -->
+                <div id="pdf-custom-dates" class="hidden grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Data Inicial</label>
+                        <input type="date" id="pdf-date-start" onchange="updatePdfPreviewSummary()" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Data Final</label>
+                        <input type="date" id="pdf-date-end" onchange="updatePdfPreviewSummary()" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Optional Filters -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-700 mb-1">Filtrar por Filial (Opcional)</label>
+                        <select id="pdf-filter-filial" onchange="updatePdfPreviewSummary()" class="w-full border border-gray-300 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                            <option value="">Todas as Filiais</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-700 mb-1">Filtrar por Status (Opcional)</label>
+                        <select id="pdf-filter-status" onchange="updatePdfPreviewSummary()" class="w-full border border-gray-300 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                            <option value="">Todos os Status</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Live Preview Summary Card -->
+                <div class="p-3.5 bg-red-50/50 rounded-xl border border-red-100 space-y-2">
+                    <span class="text-[11px] font-bold text-red-900 uppercase flex items-center gap-1">
+                        <i data-lucide="info" class="w-3.5 h-3.5 text-red-600"></i> Resumo do Relatório que será Gerado
+                    </span>
+                    <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                        <div class="p-2 bg-white rounded-lg border border-red-100">
+                            <span class="text-[10px] text-gray-500 block">Dores no Período</span>
+                            <span class="text-sm font-bold text-gray-800" id="pdf-summary-count">0</span>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg border border-red-100">
+                            <span class="text-[10px] text-gray-500 block">Impacto Financeiro</span>
+                            <span class="text-xs font-bold text-emerald-700 truncate block" id="pdf-summary-valor">R$ 0,00</span>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg border border-red-100">
+                            <span class="text-[10px] text-gray-500 block">Carga em Estoque</span>
+                            <span class="text-xs font-bold text-blue-700 truncate block" id="pdf-summary-kg">0 kg</span>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-gray-500 italic text-center pt-1">
+                        O PDF conterá os 4 blocos de insights analíticos + tabela de tratativas e SLAs em formato Paisagem A4.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+                <button type="button" onclick="closePdfModal()" class="px-4 py-2 border border-gray-300 rounded-xl text-xs font-medium text-gray-700 hover:bg-gray-100 transition">
+                    Cancelar
+                </button>
+                <div class="flex items-center space-x-2">
+                    <button type="button" onclick="downloadOrViewPdf(true)" class="px-3.5 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-100 transition flex items-center gap-1.5 shadow-2xs">
+                        <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i> Visualizar na Aba
+                    </button>
+                    <button type="button" onclick="downloadOrViewPdf(false)" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                        <i data-lucide="download" class="w-4 h-4"></i> Baixar Relatório PDF
+                    </button>
+                </div>
             </div>
         </div>
     </div>

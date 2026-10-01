@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             closeNewModal();
             closeDetailsModal();
             closeEditModal();
+            closePdfModal();
         }
     });
 });
@@ -1604,4 +1605,164 @@ function escapeHtml(text) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+// ==============================================================================
+// GESTÃO DO RELATÓRIO EXECUTIVO EM PDF COM INSIGHTS
+// ==============================================================================
+function openPdfModal() {
+    populateSelect("pdf-filter-filial", appParameters.filial || [], "Todas as Filiais");
+    populateSelect("pdf-filter-status", appParameters.status || [], "Todos os Status");
+
+    // Inherit current period if active
+    const select = document.getElementById("pdf-period-select");
+    if (activePeriodFilter.type && select) {
+        select.value = activePeriodFilter.type === "custom" ? "custom" : activePeriodFilter.type;
+        handlePdfModalPeriodChange();
+    } else {
+        updatePdfPreviewSummary();
+    }
+
+    document.getElementById("modal-relatorio-pdf")?.classList.remove("hidden");
+    lucide.createIcons();
+}
+
+function closePdfModal() {
+    document.getElementById("modal-relatorio-pdf")?.classList.add("hidden");
+}
+
+function handlePdfModalPeriodChange() {
+    const val = document.getElementById("pdf-period-select")?.value;
+    const customDiv = document.getElementById("pdf-custom-dates");
+    const startInput = document.getElementById("pdf-date-start");
+    const endInput = document.getElementById("pdf-date-end");
+
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+
+    if (val === "all") {
+        customDiv?.classList.add("hidden");
+        if (startInput) startInput.value = "";
+        if (endInput) endInput.value = "";
+    } else if (val === "7d") {
+        customDiv?.classList.add("hidden");
+        const d7 = new Date();
+        d7.setDate(today.getDate() - 7);
+        if (startInput) startInput.value = d7.toISOString().split("T")[0];
+        if (endInput) endInput.value = todayStr;
+    } else if (val === "30d") {
+        customDiv?.classList.add("hidden");
+        const d30 = new Date();
+        d30.setDate(today.getDate() - 30);
+        if (startInput) startInput.value = d30.toISOString().split("T")[0];
+        if (endInput) endInput.value = todayStr;
+    } else if (val === "month") {
+        customDiv?.classList.add("hidden");
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        if (startInput) startInput.value = firstDay.toISOString().split("T")[0];
+        if (endInput) endInput.value = todayStr;
+    } else if (val === "last_month") {
+        customDiv?.classList.add("hidden");
+        const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        if (startInput) startInput.value = firstDayLastMonth.toISOString().split("T")[0];
+        if (endInput) endInput.value = lastDayLastMonth.toISOString().split("T")[0];
+    } else if (val === "custom") {
+        customDiv?.classList.remove("hidden");
+        if (!startInput.value) {
+            const d30 = new Date();
+            d30.setDate(today.getDate() - 30);
+            startInput.value = d30.toISOString().split("T")[0];
+        }
+        if (!endInput.value) {
+            endInput.value = todayStr;
+        }
+    }
+
+    updatePdfPreviewSummary();
+}
+
+function updatePdfPreviewSummary() {
+    const periodVal = document.getElementById("pdf-period-select")?.value;
+    const s = document.getElementById("pdf-date-start")?.value;
+    const e = document.getElementById("pdf-date-end")?.value;
+    const filial = document.getElementById("pdf-filter-filial")?.value;
+    const status = document.getElementById("pdf-filter-status")?.value;
+
+    let matching = allRecords.filter(r => {
+        if (filial && r.filial !== filial) return false;
+        if (status && r.status !== status) return false;
+
+        if (periodVal !== "all") {
+            const reg_iso = r.data_registro_iso;
+            if (reg_iso) {
+                if (s && reg_iso < s) return false;
+                if (e && reg_iso > e) return false;
+            }
+        }
+        return true;
+    });
+
+    const totalVal = matching.reduce((sum, r) => sum + (parseFloat(r.valor_notas) || 0), 0);
+    const totalKgVal = matching.reduce((sum, r) => sum + (parseFloat(r.qtd_nota_kg) || 0), 0);
+
+    const countEl = document.getElementById("pdf-summary-count");
+    if (countEl) countEl.textContent = `${matching.length} demanda(s)`;
+
+    const valEl = document.getElementById("pdf-summary-valor");
+    if (valEl) valEl.textContent = formatCurrency(totalVal);
+
+    const kgEl = document.getElementById("pdf-summary-kg");
+    if (kgEl) kgEl.textContent = formatKg(totalKgVal);
+}
+
+function downloadOrViewPdf(asView = false) {
+    const periodVal = document.getElementById("pdf-period-select")?.value;
+    const s = document.getElementById("pdf-date-start")?.value;
+    const e = document.getElementById("pdf-date-end")?.value;
+    const filial = document.getElementById("pdf-filter-filial")?.value;
+    const status = document.getElementById("pdf-filter-status")?.value;
+
+    const params = new URLSearchParams();
+
+    let label = "Todo o Histórico";
+    if (periodVal === "7d") label = "Últimos 7 dias";
+    else if (periodVal === "30d") label = "Últimos 30 dias";
+    else if (periodVal === "month") label = "Este Mês";
+    else if (periodVal === "last_month") label = "Mês Anterior";
+    else if (periodVal === "custom" && s && e) label = `De ${formatDateBR(s)} até ${formatDateBR(e)}`;
+    else if (s || e) label = `De ${formatDateBR(s) || 'Início'} até ${formatDateBR(e) || 'Hoje'}`;
+
+    if (periodVal !== "all") {
+        if (s) params.append("data_inicio", s);
+        if (e) params.append("data_fim", e);
+    }
+    params.append("periodo_label", label);
+    if (filial) params.append("filial", filial);
+    if (status) params.append("status", status);
+    if (asView) params.append("view", "1");
+
+    const url = `/api/relatorio-pdf?${params.toString()}`;
+
+    if (asView) {
+        window.open(url, "_blank");
+    } else {
+        showToast("Gerando Relatório Executivo em PDF com diagnósticos...", "info");
+        window.location.href = url;
+        closePdfModal();
+    }
+}
+
+function generatePdfForCurrentPeriod() {
+    const s = activePeriodFilter.data_inicio;
+    const e = activePeriodFilter.data_fim;
+    const params = new URLSearchParams();
+
+    let label = document.getElementById("dash-period-label")?.textContent || "Período Atual";
+    params.append("periodo_label", label);
+    if (s) params.append("data_inicio", s);
+    if (e) params.append("data_fim", e);
+
+    showToast("Exportando PDF Executivo do Período Atual...", "info");
+    window.location.href = `/api/relatorio-pdf?${params.toString()}`;
 }
